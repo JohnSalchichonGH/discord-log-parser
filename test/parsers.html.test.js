@@ -48,7 +48,33 @@ describe('extractMessages', () => {
     expect(msgs[2].contentParts[0]).toBe('> U1: Hello world');
   });
 
-  it('parses the timestamp from the title attribute', () => {
+  it('reads the clean snowflake from data-message-id (A3)', () => {
+    expect(msgs[0].messageId).toBe('1393439224627200000');
+  });
+
+  it('derives an exact UTC timestamp from the snowflake (A1/A8)', () => {
+    // Locale-independent: comes from the id, not the rendered title text.
+    expect(msgs[0].timestamp.toISOString()).toBe('2025-07-12T03:50:00.000Z');
+    expect(msgs[2].timestamp.toISOString()).toBe('2025-07-12T03:52:00.000Z');
+  });
+});
+
+describe('extractMessages — timestamp fallback', () => {
+  it('falls back to the title when no snowflake id is present', () => {
+    const html = `
+      <div class="chatlog__message-group">
+        <div class="chatlog__message-container">
+          <div class="chatlog__header">
+            <span class="chatlog__author">zed</span>
+            <span class="chatlog__timestamp" title="Saturday, July 12, 2025 3:50 AM"></span>
+          </div>
+          <div class="chatlog__markdown-preserve">legacy export</div>
+        </div>
+      </div>`;
+    const userMap = new Map();
+    collectAuthors(html, userMap, { value: 1 });
+    const msgs = extractMessages(html, userMap);
+    expect(msgs).toHaveLength(1);
     expect(msgs[0].timestamp).toBeInstanceOf(Date);
     expect(isNaN(msgs[0].timestamp)).toBe(false);
   });

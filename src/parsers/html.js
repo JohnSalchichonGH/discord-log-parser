@@ -2,13 +2,15 @@
 // Extracted verbatim from legacy index.html (MessageGroupTemplate.cshtml structure).
 //
 // KNOWN ISSUES (tracked for later phases):
-//  - Reads `container.id` and strips a "message-" prefix, but current DCE emits
-//    id="chatlog__message-container-<id>" plus data-message-id="<id>" (bug A3).
-//  - Timestamps are read from the locale-dependent `.title` attribute and parsed
-//    with the native Date parser, which is unreliable across locales (bug A1/A8).
 //  - Uses window.location.href as a URL base, so it is not yet Worker-safe.
+//
+// FIXED: messageId now comes from the clean `data-message-id` snowflake (A3),
+// and timestamps are derived from that snowflake's embedded creation time
+// (locale-independent, A1/A8), falling back to the rendered title only when a
+// snowflake is unavailable (e.g. older exports).
 
 import { parseTimestamp } from '../core/time.js';
+import { snowflakeToDate } from '../core/snowflake.js';
 
 export function collectAuthors(htmlString, userMap, counter) {
   const parser = new DOMParser();
@@ -41,15 +43,23 @@ export function extractMessages(htmlString, userMap) {
     const authorId = userMap.get(authorName) || authorName;
 
     group.querySelectorAll('.chatlog__message-container').forEach((container) => {
+      // A3: prefer the clean snowflake in data-message-id; fall back to the
+      // legacy container id (older exports used id="message-<id>").
       const rawId = container.id || '';
-      const messageId = rawId.startsWith('message-')
-        ? rawId.slice(8)
-        : rawId || null;
-      const tsTag = container.querySelector(
-        '.chatlog__timestamp, .chatlog__short-timestamp, .chatlog__system-notification-timestamp',
-      );
-      if (!tsTag || !tsTag.title) return;
-      const dtObj = parseTimestamp(tsTag.title);
+      const messageId =
+        container.getAttribute('data-message-id') ||
+        (rawId.startsWith('message-') ? rawId.slice(8) : rawId || null);
+
+      // A1/A8: derive an exact UTC instant from the snowflake when possible;
+      // otherwise fall back to parsing the locale-dependent timestamp title.
+      let dtObj = snowflakeToDate(messageId);
+      if (!dtObj) {
+        const tsTag = container.querySelector(
+          '.chatlog__timestamp, .chatlog__short-timestamp, .chatlog__system-notification-timestamp',
+        );
+        if (!tsTag || !tsTag.title) return;
+        dtObj = parseTimestamp(tsTag.title);
+      }
       if (!dtObj) return;
 
       const contentParts = [];
