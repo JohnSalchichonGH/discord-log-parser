@@ -6,7 +6,9 @@
 import { redactString } from '../core/redact.js';
 
 export function renderCSV(finalChunks, userMap, opts) {
-  const rows = [['timestamp', 'author_id', 'author_name', 'content', 'reactions']];
+  const rows = [
+    ['timestamp', 'author_id', 'author_name', 'content', 'reactions'],
+  ];
   for (const c of finalChunks) {
     const content = redactString(
       c.contentParts.filter((p) => !p.startsWith('^')).join(' | '),
@@ -22,6 +24,8 @@ export function renderCSV(finalChunks, userMap, opts) {
     ]);
   }
   return rows
-    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .map((r) =>
+      r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','),
+    )
     .join('\n');
 }

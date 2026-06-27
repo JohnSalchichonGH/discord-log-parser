@@ -70,7 +70,8 @@ export function parseMessages(content) {
         const ext = fname.split('.').pop().toLowerCase();
         if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext))
           parts.push(`[${ext === 'gif' ? 'GIF' : 'IMG'}: ${fname}]`);
-        else if (['mp4', 'mov', 'webm'].includes(ext)) parts.push(`[VID: ${fname}]`);
+        else if (['mp4', 'mov', 'webm'].includes(ext))
+          parts.push(`[VID: ${fname}]`);
         else if (fname) parts.push(`[MEDIA: ${fname}]`);
       } catch {
         parts.push('[MEDIA: unknown]');
@@ -79,7 +80,8 @@ export function parseMessages(content) {
     // Stickers (A5): one [STICKER] token per sticker URL in the {Stickers} block.
     for (let i = 0; i < stickers.length; i++) parts.push('[STICKER]');
 
-    const reactionStr = reactions.length > 0 ? `^{${reactions.join(', ')}}` : null;
+    const reactionStr =
+      reactions.length > 0 ? `^{${reactions.join(', ')}}` : null;
 
     if (parts.length > 0 || reactionStr)
       messages.push({

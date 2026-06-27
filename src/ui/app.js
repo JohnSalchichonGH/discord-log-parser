@@ -22,9 +22,21 @@ import {
 
 /* CONSTANTS */
 const BAR_COLORS = [
-  '#6c9eff', '#5ccf7f', '#e09a5c', '#e06c6c', '#a78bfa',
-  '#f472b6', '#56c8e8', '#4dd4a0', '#f0a060', '#b89cff',
-  '#40d0d0', '#8cd460', '#e88080', '#70b0ff', '#d088f0',
+  '#6c9eff',
+  '#5ccf7f',
+  '#e09a5c',
+  '#e06c6c',
+  '#a78bfa',
+  '#f472b6',
+  '#56c8e8',
+  '#4dd4a0',
+  '#f0a060',
+  '#b89cff',
+  '#40d0d0',
+  '#8cd460',
+  '#e88080',
+  '#70b0ff',
+  '#d088f0',
 ];
 
 /* STATE */
@@ -86,7 +98,8 @@ function loadSettings() {
     if (!s) return;
     if (s.maxTokens) $('maxTokens').value = s.maxTokens;
     if (s.modelPreset) $('modelPreset').value = s.modelPreset;
-    if (s.filterLowActivity) $('filterLowActivity').checked = s.filterLowActivity;
+    if (s.filterLowActivity)
+      $('filterLowActivity').checked = s.filterLowActivity;
     if (s.minMessages) $('minMessages').value = s.minMessages;
     if (s.filterBots) $('filterBots').checked = s.filterBots;
     if (s.filterSystem) $('filterSystem').checked = s.filterSystem;
@@ -98,7 +111,8 @@ function loadSettings() {
     if (s.outputFormat) $('outputFormat').value = s.outputFormat;
     if (s.chunkOutput) $('chunkOutput').checked = s.chunkOutput;
     if (s.chunkOverlap) $('chunkOverlap').value = s.chunkOverlap;
-    if (s.useAccurateTokens) $('useAccurateTokens').checked = s.useAccurateTokens;
+    if (s.useAccurateTokens)
+      $('useAccurateTokens').checked = s.useAccurateTokens;
     updateTokenLabel();
     $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
     $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
@@ -112,7 +126,9 @@ function goToStep(n) {
   if (n > 1 && !loadedFiles.length) return;
   if (n > currentStep + 1) return; // can't skip forward
 
-  document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+  document
+    .querySelectorAll('.panel')
+    .forEach((p) => p.classList.remove('active'));
   $('panel' + n).classList.add('active');
 
   document.querySelectorAll('.wizard-step').forEach((s) => {
@@ -251,9 +267,17 @@ function addFiles(files) {
     const isTxt = lower.endsWith('.txt');
     const isJson = lower.endsWith('.json');
     const meta = isTxt
-      ? { channelId: file.name, baseName: file.name.replace(/\.txt$/i, ''), afterDate: null }
+      ? {
+          channelId: file.name,
+          baseName: file.name.replace(/\.txt$/i, ''),
+          afterDate: null,
+        }
       : isJson
-        ? { channelId: file.name, baseName: file.name.replace(/\.json$/i, ''), afterDate: null }
+        ? {
+            channelId: file.name,
+            baseName: file.name.replace(/\.json$/i, ''),
+            afterDate: null,
+          }
         : parseFilename(file.name);
     const reader = new FileReader();
     reader.onload = function (e) {
@@ -435,7 +459,9 @@ function onAllFilesLoaded() {
       <span class="user-count">${count}</span>
       <span class="bot-tag ${isBot ? 'active' : ''}" data-name="${escHtml(name)}" title="Click to tag/untag as bot">${isBot ? 'BOT' : 'bot?'}</span>
     `;
-      item.querySelector('input').addEventListener('change', updateUserFilterCount);
+      item
+        .querySelector('input')
+        .addEventListener('change', updateUserFilterCount);
       item.querySelector('.bot-tag').addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -507,125 +533,146 @@ function runProcessing() {
   // Ensure the selected token counter (approx or accurate BPE) is loaded first.
   ensureCounterReady().then(() => {
     setTimeout(() => {
-    try {
-      const groups = buildGroups(loadedFiles.filter((f) => !f.invalid));
-      const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
-      const maxChars = maxTokens * 4;
-      const doFilter = $('filterLowActivity').checked;
-      const minMsgs = doFilter
-        ? Math.max(1, parseInt($('minMessages').value) || 10)
-        : 0;
-      const userFilterCbs = [
-        ...$('userFilterList').querySelectorAll('input:checked'),
-      ].map((cb) => cb.value);
-      const userFilter = userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
-      const dateFromVal = $('dateFrom').value
-        ? localDate($('dateFrom').value, false)
-        : null;
-      const dateToVal = $('dateTo').value ? localDate($('dateTo').value, true) : null;
-      const keywordsRaw = $('keywordInput').value.trim();
-      const keywords = keywordsRaw
-        ? keywordsRaw.split('\n').map((l) => l.trim()).filter(Boolean)
-        : [];
+      try {
+        const groups = buildGroups(loadedFiles.filter((f) => !f.invalid));
+        const maxTokens = Math.max(
+          1000,
+          parseInt($('maxTokens').value) || 1375000,
+        );
+        const maxChars = maxTokens * 4;
+        const doFilter = $('filterLowActivity').checked;
+        const minMsgs = doFilter
+          ? Math.max(1, parseInt($('minMessages').value) || 10)
+          : 0;
+        const userFilterCbs = [
+          ...$('userFilterList').querySelectorAll('input:checked'),
+        ].map((cb) => cb.value);
+        const userFilter =
+          userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
+        const dateFromVal = $('dateFrom').value
+          ? localDate($('dateFrom').value, false)
+          : null;
+        const dateToVal = $('dateTo').value
+          ? localDate($('dateTo').value, true)
+          : null;
+        const keywordsRaw = $('keywordInput').value.trim();
+        const keywords = keywordsRaw
+          ? keywordsRaw
+              .split('\n')
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : [];
 
-      const opts = {
-        minMsgs,
-        maxTokens,
-        maxChars,
-        userFilter,
-        filterBots: $('filterBots').checked,
-        botSet: botUsers,
-        filterSystem: $('filterSystem').checked,
-        filterMediaOnly: $('filterMediaOnly').checked,
-        dateFrom: dateFromVal,
-        dateTo: dateToVal,
-        keywords,
-        useRealNames: $('useRealNames').checked,
-        countTokens,
-        maxTokens,
-      };
-
-      fill.style.width = '40%';
-
-      processedOutputs = [];
-      let totalMessages = 0,
-        totalFiltered = 0,
-        totalKept = 0;
-      let allFinalChunks = [],
-        allUserMap = new Map();
-
-      for (const [, arr] of groups) {
-        const { finalChunks, userMap, allMessagesCount, filteredCount } =
-          processGroup(arr, opts);
-        totalMessages += allMessagesCount;
-        totalFiltered += filteredCount;
-        totalKept += finalChunks.length;
-        allFinalChunks = allFinalChunks.concat(finalChunks);
-        for (const [k, v] of userMap) allUserMap.set(k, v);
-
-        processedOutputs.push({
-          name: arr[0].baseName,
-          finalChunks,
-          userMap,
-          totalRaw: allMessagesCount,
-          filteredCount,
-        });
-      }
-
-      fill.style.width = '75%';
-
-      renderStats(totalMessages, totalFiltered, totalKept, allFinalChunks, allUserMap);
-
-      if (processedOutputs.length > 0) {
-        const po = processedOutputs[0];
-        const renderOpts = {
-          preamble: $('customPreamble').value,
-          redactNames: $('redactNames').checked,
-          redactUrls: $('redactUrls').checked,
-          redactEmails: $('redactEmails').checked,
+        const opts = {
+          minMsgs,
+          maxTokens,
+          maxChars,
+          userFilter,
+          filterBots: $('filterBots').checked,
+          botSet: botUsers,
+          filterSystem: $('filterSystem').checked,
+          filterMediaOnly: $('filterMediaOnly').checked,
+          dateFrom: dateFromVal,
+          dateTo: dateToVal,
+          keywords,
+          useRealNames: $('useRealNames').checked,
+          countTokens,
         };
-        const previewText = renderTxt(po.finalChunks, po.userMap, maxTokens, renderOpts);
-        const lines = previewText.split('\n');
-        const maxPreviewLines = 300;
-        $('previewContent').textContent =
-          lines.length > maxPreviewLines
-            ? lines.slice(0, maxPreviewLines).join('\n') +
-              `\n\n… (${lines.length - maxPreviewLines} more lines)`
-            : previewText;
-        const chars = previewText.length;
-        const estTokens = countTokens(previewText);
-        const tokenLabel = $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
-        $('previewInfo').textContent = `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
-        $('previewCard').style.display = 'block';
-      }
 
-      fill.style.width = '100%';
-      setTimeout(() => {
-        progress.classList.remove('active');
-        fill.style.width = '0%';
-      }, 600);
-      if (totalMessages === 0) {
-        // E2: a silent empty result usually means the parser couldn't read the
-        // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
-        statusEl.textContent =
-          'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
+        fill.style.width = '40%';
+
+        processedOutputs = [];
+        let totalMessages = 0,
+          totalFiltered = 0,
+          totalKept = 0;
+        let allFinalChunks = [],
+          allUserMap = new Map();
+
+        for (const [, arr] of groups) {
+          const { finalChunks, userMap, allMessagesCount, filteredCount } =
+            processGroup(arr, opts);
+          totalMessages += allMessagesCount;
+          totalFiltered += filteredCount;
+          totalKept += finalChunks.length;
+          allFinalChunks = allFinalChunks.concat(finalChunks);
+          for (const [k, v] of userMap) allUserMap.set(k, v);
+
+          processedOutputs.push({
+            name: arr[0].baseName,
+            finalChunks,
+            userMap,
+            totalRaw: allMessagesCount,
+            filteredCount,
+          });
+        }
+
+        fill.style.width = '75%';
+
+        renderStats(
+          totalMessages,
+          totalFiltered,
+          totalKept,
+          allFinalChunks,
+          allUserMap,
+        );
+
+        if (processedOutputs.length > 0) {
+          const po = processedOutputs[0];
+          const renderOpts = {
+            preamble: $('customPreamble').value,
+            redactNames: $('redactNames').checked,
+            redactUrls: $('redactUrls').checked,
+            redactEmails: $('redactEmails').checked,
+          };
+          const previewText = renderTxt(
+            po.finalChunks,
+            po.userMap,
+            maxTokens,
+            renderOpts,
+          );
+          const lines = previewText.split('\n');
+          const maxPreviewLines = 300;
+          $('previewContent').textContent =
+            lines.length > maxPreviewLines
+              ? lines.slice(0, maxPreviewLines).join('\n') +
+                `\n\n… (${lines.length - maxPreviewLines} more lines)`
+              : previewText;
+          const chars = previewText.length;
+          const estTokens = countTokens(previewText);
+          const tokenLabel =
+            $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
+          $('previewInfo').textContent =
+            `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
+          $('previewCard').style.display = 'block';
+        }
+
+        fill.style.width = '100%';
+        setTimeout(() => {
+          progress.classList.remove('active');
+          fill.style.width = '0%';
+        }, 600);
+        if (totalMessages === 0) {
+          // E2: a silent empty result usually means the parser couldn't read the
+          // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
+          statusEl.textContent =
+            'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
+          statusEl.className = 'status-bar error';
+        } else {
+          statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
+          statusEl.className = 'status-bar success';
+        }
+        $('toStep4').disabled = false;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error: ' + err.message;
         statusEl.className = 'status-bar error';
-      } else {
-        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
-        statusEl.className = 'status-bar success';
+        progress.classList.remove('active');
       }
-      $('toStep4').disabled = false;
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = 'Error: ' + err.message;
-      statusEl.className = 'status-bar error';
-      progress.classList.remove('active');
-    }
     }, 80);
   });
 }
 
-function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
+function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
   const dateRange =
     chunks.length > 0
       ? `${chunks[0].timestamp.toLocaleDateString('en-US', {
@@ -633,12 +680,15 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
           day: 'numeric',
           year: 'numeric',
           timeZone: 'UTC',
-        })} — ${chunks[chunks.length - 1].timestamp.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          timeZone: 'UTC',
-        })}`
+        })} — ${chunks[chunks.length - 1].timestamp.toLocaleDateString(
+          'en-US',
+          {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            timeZone: 'UTC',
+          },
+        )}`
       : 'N/A';
   const uniqueUsers = new Set(chunks.map((c) => c.authorId)).size;
   const avgLen =
@@ -662,7 +712,8 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
   `;
 
   const userCounts = {};
-  for (const c of chunks) userCounts[c.authorId] = (userCounts[c.authorId] || 0) + 1;
+  for (const c of chunks)
+    userCounts[c.authorId] = (userCounts[c.authorId] || 0) + 1;
   const sorted = Object.entries(userCounts).sort((a, b) => b[1] - a[1]);
   const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
   const topN = sorted.slice(0, 15);
@@ -682,7 +733,7 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
   $('statsCard').style.display = 'block';
 
   const budgetBars = [];
-  for (const [uid, count] of sorted.slice(0, 10)) {
+  for (const [uid] of sorted.slice(0, 10)) {
     const userChars = chunks
       .filter((c) => c.authorId === uid)
       .reduce((s, c) => s + c.contentParts.join('\n').length + 15, 0);
@@ -765,7 +816,10 @@ $('downloadBtn').addEventListener('click', () => {
             ext = 'txt';
             break;
         }
-        setTimeout(() => downloadFile(text, `${po.name}_chunk${i + 1}.${ext}`), dlCount * 400);
+        setTimeout(
+          () => downloadFile(text, `${po.name}_chunk${i + 1}.${ext}`),
+          dlCount * 400,
+        );
         dlCount++;
       });
     } else {
@@ -776,7 +830,12 @@ $('downloadBtn').addEventListener('click', () => {
           ext = 'json';
           break;
         case 'md':
-          text = renderMarkdown(po.finalChunks, po.userMap, maxTokens, renderOpts);
+          text = renderMarkdown(
+            po.finalChunks,
+            po.userMap,
+            maxTokens,
+            renderOpts,
+          );
           ext = 'md';
           break;
         case 'csv':
@@ -788,7 +847,10 @@ $('downloadBtn').addEventListener('click', () => {
           ext = 'txt';
           break;
       }
-      setTimeout(() => downloadFile(text, `${po.name}_processed.${ext}`), dlCount * 400);
+      setTimeout(
+        () => downloadFile(text, `${po.name}_processed.${ext}`),
+        dlCount * 400,
+      );
       dlCount++;
     }
   }

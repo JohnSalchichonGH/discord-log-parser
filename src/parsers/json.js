@@ -33,7 +33,8 @@ function mediaTokenFromFileName(fileName) {
 
 function embedToken(embed) {
   const title = (embed.title || '').trim();
-  if (embed.video && embed.video.url) return `[VID: ${title || 'Embedded Video'}]`;
+  if (embed.video && embed.video.url)
+    return `[VID: ${title || 'Embedded Video'}]`;
   if (/youtube\.com|youtu\.be/i.test(embed.url || ''))
     return `[YT: ${title || 'Video'}]`;
   if (title) return `[EMBED: ${title}]`;
@@ -46,7 +47,7 @@ export function parseJsonExport(content) {
   try {
     data = JSON.parse(content);
   } catch (e) {
-    throw new Error('Invalid JSON: ' + e.message);
+    throw new Error('Invalid JSON: ' + e.message, { cause: e });
   }
   if (!data || typeof data !== 'object' || !Array.isArray(data.messages)) {
     throw new Error(

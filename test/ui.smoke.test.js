@@ -58,14 +58,19 @@ describe('UI wiring smoke test', () => {
     const file = new File([json], 'My Server - general [123456789].json', {
       type: 'application/json',
     });
-    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    Object.defineProperty(input, 'files', {
+      value: [file],
+      configurable: true,
+    });
     input.dispatchEvent(new window.Event('change'));
 
     await waitFor(() => document.getElementById('toStep2').disabled === false);
 
     expect(document.querySelector('.file-name').textContent).toContain('.json');
     // No invalid/error badge for a well-formed export.
-    expect(document.querySelector('.file-item span[style*="danger"]')).toBeNull();
+    expect(
+      document.querySelector('.file-item span[style*="danger"]'),
+    ).toBeNull();
   });
 
   it('escapes malicious usernames in the stats chart (D1/XSS)', async () => {
@@ -92,7 +97,9 @@ describe('UI wiring smoke test', () => {
     });
     const input = document.getElementById('fileInput');
     Object.defineProperty(input, 'files', {
-      value: [new File([json], 'G - evil [999].json', { type: 'application/json' })],
+      value: [
+        new File([json], 'G - evil [999].json', { type: 'application/json' }),
+      ],
       configurable: true,
     });
     input.dispatchEvent(new window.Event('change'));

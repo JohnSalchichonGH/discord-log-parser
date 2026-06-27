@@ -8,7 +8,8 @@ import { redactString } from '../core/redact.js';
 export function renderJSON(finalChunks, userMap, opts) {
   const msgs = finalChunks.map((c) => {
     const reply =
-      c.contentParts.find((p) => p.startsWith('>'))?.replace(/^>\s*/, '') || null;
+      c.contentParts.find((p) => p.startsWith('>'))?.replace(/^>\s*/, '') ||
+      null;
     return {
       timestamp: c.timestamp.toISOString(),
       author: opts.redactNames ? c.authorId : c.authorName,
@@ -21,7 +22,8 @@ export function renderJSON(finalChunks, userMap, opts) {
       ),
       replyTo: reply ? redactString(reply, opts) : null,
       reactions:
-        c.contentParts.find((p) => p.startsWith('^'))?.replace(/^\^/, '') || null,
+        c.contentParts.find((p) => p.startsWith('^'))?.replace(/^\^/, '') ||
+        null,
     };
   });
   return JSON.stringify(

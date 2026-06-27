@@ -23,7 +23,8 @@ describe('legendReserve', () => {
 });
 
 describe('fitToBudget', () => {
-  const measure = (msgs) => msgs.reduce((s, m) => s + m.contentParts[0].length, 0);
+  const measure = (msgs) =>
+    msgs.reduce((s, m) => s + m.contentParts[0].length, 0);
 
   it('returns the list unchanged when it already fits', () => {
     const msgs = [{ contentParts: ['ab'] }, { contentParts: ['cd'] }];
@@ -92,7 +93,9 @@ describe('A7: rendered output stays within the budget', () => {
       countTokens,
       maxTokens,
     });
-    const measured = countTokens(renderTxt(finalChunks, userMap, maxTokens, {}));
+    const measured = countTokens(
+      renderTxt(finalChunks, userMap, maxTokens, {}),
+    );
     expect(measured).toBeLessThanOrEqual(maxTokens);
   });
 });

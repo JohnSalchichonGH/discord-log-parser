@@ -11,7 +11,9 @@ describe('parseFilename', () => {
   });
 
   it('parses a dated partial "(after YYYY-MM-DD)" filename', () => {
-    const r = parseFilename('My Server - general [123456789] (after 2025-07-12).html');
+    const r = parseFilename(
+      'My Server - general [123456789] (after 2025-07-12).html',
+    );
     expect(r.channelId).toBe('123456789');
     expect(r.afterDate).toBe('2025-07-12');
     expect(r.sortOrder).toBe(new Date('2025-07-12').getTime());

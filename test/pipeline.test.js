@@ -31,7 +31,10 @@ function baseOpts(over = {}) {
 describe('processGroup (HTML)', () => {
   it('extracts all messages and builds a userMap', () => {
     const files = [{ isTxt: false, content: sampleHtml }];
-    const { finalChunks, userMap, allMessagesCount } = processGroup(files, baseOpts());
+    const { finalChunks, userMap, allMessagesCount } = processGroup(
+      files,
+      baseOpts(),
+    );
     expect(allMessagesCount).toBe(3);
     expect(finalChunks).toHaveLength(3);
     expect(userMap.get('alice')).toBe('U1');
@@ -85,25 +88,45 @@ describe('processGroup — TXT dedup (B5)', () => {
 
   it('keeps legitimately-repeated identical messages within one file', () => {
     const content = txt(
-      ['[7/12/2025 3:50 AM] bob', 'ok', '', '[7/12/2025 3:50 AM] bob', 'ok', ''].join(
-        '\n',
-      ),
+      [
+        '[7/12/2025 3:50 AM] bob',
+        'ok',
+        '',
+        '[7/12/2025 3:50 AM] bob',
+        'ok',
+        '',
+      ].join('\n'),
     );
-    const { finalChunks } = processGroup([{ isTxt: true, content }], baseOpts());
-    expect(finalChunks.filter((m) => m.contentParts[0] === 'ok')).toHaveLength(2);
+    const { finalChunks } = processGroup(
+      [{ isTxt: true, content }],
+      baseOpts(),
+    );
+    expect(finalChunks.filter((m) => m.contentParts[0] === 'ok')).toHaveLength(
+      2,
+    );
   });
 
   it('deduplicates the overlap between two export files', () => {
     // Both files contain the same two messages; result should keep each once.
     const a = txt(
-      ['[7/12/2025 3:50 AM] bob', 'hello', '', '[7/12/2025 3:51 AM] bob', 'world', ''].join(
-        '\n',
-      ),
+      [
+        '[7/12/2025 3:50 AM] bob',
+        'hello',
+        '',
+        '[7/12/2025 3:51 AM] bob',
+        'world',
+        '',
+      ].join('\n'),
     );
     const b = txt(
-      ['[7/12/2025 3:51 AM] bob', 'world', '', '[7/12/2025 3:52 AM] bob', 'new', ''].join(
-        '\n',
-      ),
+      [
+        '[7/12/2025 3:51 AM] bob',
+        'world',
+        '',
+        '[7/12/2025 3:52 AM] bob',
+        'new',
+        '',
+      ].join('\n'),
     );
     const { finalChunks } = processGroup(
       [
@@ -120,16 +143,24 @@ describe('processGroup — TXT dedup (B5)', () => {
 describe('processGroup (JSON)', () => {
   it('extracts all messages with locale-independent timestamps', () => {
     const files = [{ isJson: true, content: sampleJson }];
-    const { finalChunks, userMap, allMessagesCount } = processGroup(files, baseOpts());
+    const { finalChunks, userMap, allMessagesCount } = processGroup(
+      files,
+      baseOpts(),
+    );
     expect(allMessagesCount).toBe(5);
     expect(finalChunks).toHaveLength(5);
     expect(userMap.get('alice')).toBe('U1');
-    expect(finalChunks[0].timestamp.toISOString()).toBe('2025-07-12T03:50:00.000Z');
+    expect(finalChunks[0].timestamp.toISOString()).toBe(
+      '2025-07-12T03:50:00.000Z',
+    );
   });
 
   it('drops system messages when filterSystem is on', () => {
     const files = [{ isJson: true, content: sampleJson }];
-    const { finalChunks } = processGroup(files, baseOpts({ filterSystem: true }));
+    const { finalChunks } = processGroup(
+      files,
+      baseOpts({ filterSystem: true }),
+    );
     expect(finalChunks).toHaveLength(4); // GuildMemberJoin removed
   });
 
@@ -188,7 +219,9 @@ describe('renderTxt (end-to-end)', () => {
         contentParts: ['see https://example.com/x now'],
       },
     ];
-    const red = renderTxt(m, new Map([['a', 'U1']]), 1000, { redactUrls: true });
+    const red = renderTxt(m, new Map([['a', 'U1']]), 1000, {
+      redactUrls: true,
+    });
     expect(red).toContain('[URL]');
     expect(red).not.toContain('example.com');
   });

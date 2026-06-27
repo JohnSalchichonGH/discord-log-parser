@@ -97,13 +97,13 @@ https://...   ← skipped, no useful content
 
 Controls how much of the conversation is kept. The tool always keeps the **newest** messages and discards the oldest until the output fits within the limit. One-click presets are provided for common models:
 
-| Preset | Tokens |
-|---|---|
+| Preset               | Tokens    |
+| -------------------- | --------- |
 | Claude (1M+ context) | 1,375,000 |
-| Claude (200K) | 200,000 |
-| GPT-4 (128K) | 128,000 |
-| Gemini (1M) | 1,000,000 |
-| Gemini (2M) | 2,000,000 |
+| Claude (200K)        | 200,000   |
+| GPT-4 (128K)         | 128,000   |
+| Gemini (1M)          | 1,000,000 |
+| Gemini (2M)          | 2,000,000 |
 
 The equivalent character count is shown live (approximation: 1 token ≈ 4 characters). A custom value can be entered for any other model.
 
@@ -119,11 +119,11 @@ Multiple export files covering the same channel are automatically merged into on
 
 **Filename conventions understood:**
 
-| Filename pattern | Meaning |
-|---|---|
-| `Name [ID].html` | Base export (any modification date) |
-| `Name [ID] (after YYYY-MM-DD).html` | Partial export starting from a date |
-| Multiple base files with same ID | All merged, sorted by modification date |
+| Filename pattern                    | Meaning                                 |
+| ----------------------------------- | --------------------------------------- |
+| `Name [ID].html`                    | Base export (any modification date)     |
+| `Name [ID] (after YYYY-MM-DD).html` | Partial export starting from a date     |
+| Multiple base files with same ID    | All merged, sorted by modification date |
 
 **Deduplication:** Messages that appear in more than one file (overlap between exports) are deduplicated. For `.html` files the Discord message snowflake ID is used as the key. For `.txt` files the key is `timestamp|author|first 30 chars of content`. The **oldest file's version** of a duplicate message is kept.
 
@@ -146,7 +146,7 @@ meeting
 
 ### User filters
 
-**Low-activity filter:** When enabled, any participant whose message count in the final (post-trim) output is below the threshold is removed entirely. The filter runs *after* token trimming, so the count reflects what actually appears in the file.
+**Low-activity filter:** When enabled, any participant whose message count in the final (post-trim) output is below the threshold is removed entirely. The filter runs _after_ token trimming, so the count reflects what actually appears in the file.
 
 **User whitelist:** After files are loaded, a list of every participant is shown with approximate message counts. Select specific users to include (none selected = include everyone).
 
@@ -176,12 +176,12 @@ Focus on technical discussions and decisions made by the team.
 
 ### Output formats
 
-| Format | Extension | Best for |
-|---|---|---|
-| Compact TXT | `.txt` | Direct LLM context injection (default) |
-| JSON | `.json` | Programmatic analysis, function-calling models |
-| Markdown | `.md` | Models that handle Markdown well, human reading |
-| CSV | `.csv` | Spreadsheet analysis |
+| Format      | Extension | Best for                                        |
+| ----------- | --------- | ----------------------------------------------- |
+| Compact TXT | `.txt`    | Direct LLM context injection (default)          |
+| JSON        | `.json`   | Programmatic analysis, function-calling models  |
+| Markdown    | `.md`     | Models that handle Markdown well, human reading |
+| CSV         | `.csv`    | Spreadsheet analysis                            |
 
 ### Chunked output
 
@@ -239,22 +239,22 @@ npm run build:all  # also build dist/index-accurate.html (bundles a real BPE tok
 
 Two builds are produced from the same source:
 
-| File | Size | Token counting |
-|---|---|---|
-| `dist/index.html` | ~265 KB | Fast `1 token ≈ 4 chars` estimate |
+| File                       | Size    | Token counting                                               |
+| -------------------------- | ------- | ------------------------------------------------------------ |
+| `dist/index.html`          | ~265 KB | Fast `1 token ≈ 4 chars` estimate                            |
 | `dist/index-accurate.html` | ~2.3 MB | Real BPE tokenizer (GPT cl100k_base) behind an opt-in toggle |
 
 A build-time flag dead-code-eliminates the tokenizer from the lean build, so the default file stays small. Use `npm run dev:accurate` to run the accurate variant in dev.
 
 Layout:
 
-| Path | Contents |
-|---|---|
-| `src/core/` | grouping, processing pipeline, chunking, token estimation, time/format helpers |
-| `src/parsers/` | HTML and TXT export parsers |
-| `src/render/` | TXT / JSON / Markdown / CSV renderers |
-| `src/ui/` | markup styles + the DOM controller (`app.js`) |
-| `test/` | Vitest suites + synthetic DCE fixtures |
-| `reference/legacy-index.html` | the original single-file build, frozen as a behavior oracle |
+| Path                          | Contents                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| `src/core/`                   | grouping, processing pipeline, chunking, token estimation, time/format helpers |
+| `src/parsers/`                | HTML and TXT export parsers                                                    |
+| `src/render/`                 | TXT / JSON / Markdown / CSV renderers                                          |
+| `src/ui/`                     | markup styles + the DOM controller (`app.js`)                                  |
+| `test/`                       | Vitest suites + synthetic DCE fixtures                                         |
+| `reference/legacy-index.html` | the original single-file build, frozen as a behavior oracle                    |
 
 All parsing/processing/rendering logic lives in tested modules; `src/ui/app.js` is the thin DOM glue.

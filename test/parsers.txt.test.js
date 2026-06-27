@@ -48,7 +48,9 @@ describe('parseMessages (TXT)', () => {
   });
 
   it('flags "joined the server." as a system message', () => {
-    const joined = msgs.find((m) => m.contentParts[0].includes('joined the server'));
+    const joined = msgs.find((m) =>
+      m.contentParts[0].includes('joined the server'),
+    );
     expect(joined.isSystem).toBe(true);
   });
 });
@@ -104,9 +106,11 @@ describe('TXT stickers / forwarded / blockquote handling', () => {
 
   it('keeps a markdown blockquote as body text, not a reply (A4)', () => {
     const { msgs } = parse(
-      ['[7/12/2025 3:50 AM] alice', '> someone said: hello there', 'my reply'].join(
-        '\n',
-      ),
+      [
+        '[7/12/2025 3:50 AM] alice',
+        '> someone said: hello there',
+        'my reply',
+      ].join('\n'),
     );
     expect(msgs[0].contentParts[0]).toContain('> someone said: hello there');
     expect(msgs[0].contentParts[0]).toContain('my reply');

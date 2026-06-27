@@ -29,7 +29,9 @@ export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
     .forEach(([name, uid]) => {
       const c = stats[uid];
       const pct = ((c / total) * 100).toFixed(1);
-      out.push(`- **${uid}**: ${opts.redactNames ? '' : name + ' '}(${c} msgs, ${pct}%)`);
+      out.push(
+        `- **${uid}**: ${opts.redactNames ? '' : name + ' '}(${c} msgs, ${pct}%)`,
+      );
     });
   out.push('');
   out.push('---');
@@ -53,10 +55,11 @@ export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
     out.push('');
   }
   let result = out.join('\n');
-  if (opts.redactUrls) result = result.replace(/https?:\/\/[^\s\]>)]+/g, '[URL]');
+  if (opts.redactUrls)
+    result = result.replace(/https?:\/\/[^\s\]>)]+/g, '[URL]');
   if (opts.redactEmails) {
     result = result.replace(
-      /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
       '[EMAIL]',
     );
     // D2: match TXT — also redact phone numbers.

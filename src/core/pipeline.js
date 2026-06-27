@@ -166,7 +166,9 @@ export function processGroup(sortedFiles, opts) {
   }
   keptNormal.reverse();
 
-  let finalChunks = [...kept, ...keptNormal].sort((a, b) => a.timestamp - b.timestamp);
+  let finalChunks = [...kept, ...keptNormal].sort(
+    (a, b) => a.timestamp - b.timestamp,
+  );
 
   // A7 verify-and-retrim: measure the actual rendered TXT and drop oldest
   // non-priority messages until it fits within the budget. When an accurate
@@ -189,7 +191,8 @@ export function processGroup(sortedFiles, opts) {
   // Post-trim: low activity filter
   if (minMsgs > 0) {
     const counts = {};
-    for (const m of finalChunks) counts[m.authorId] = (counts[m.authorId] || 0) + 1;
+    for (const m of finalChunks)
+      counts[m.authorId] = (counts[m.authorId] || 0) + 1;
     const excluded = new Set(
       Object.keys(counts).filter((uid) => counts[uid] < minMsgs),
     );

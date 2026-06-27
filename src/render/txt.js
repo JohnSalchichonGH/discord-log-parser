@@ -28,7 +28,9 @@ export function renderTxt(finalChunks, userMap, maxTokens, opts) {
     out.push('');
   }
 
-  out.push(`# LLM-Optimized Chat Log (Limit: ~${maxTokens.toLocaleString()} tokens)`);
+  out.push(
+    `# LLM-Optimized Chat Log (Limit: ~${maxTokens.toLocaleString()} tokens)`,
+  );
   out.push(`# Start: ${finalChunks[0].timestamp.toUTCString()}`);
   out.push('# Participants:');
 
@@ -104,7 +106,7 @@ export function renderTxt(finalChunks, userMap, maxTokens, opts) {
   if (opts.redactUrls) result = result.replace(/https?:\/\/[^\s\]]+/g, '[URL]');
   if (opts.redactEmails) {
     result = result.replace(
-      /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
       '[EMAIL]',
     );
     result = result.replace(

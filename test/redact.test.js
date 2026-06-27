@@ -14,7 +14,9 @@ describe('redactString', () => {
     expect(redactString('call 555-123-4567', ALL)).toBe('call [PHONE]');
   });
   it('does nothing when flags are off', () => {
-    expect(redactString('https://x.com me@x.io', {})).toBe('https://x.com me@x.io');
+    expect(redactString('https://x.com me@x.io', {})).toBe(
+      'https://x.com me@x.io',
+    );
   });
 });
 

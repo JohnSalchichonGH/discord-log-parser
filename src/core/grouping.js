@@ -18,7 +18,12 @@ export function parseFilename(filename) {
       afterDate: m[3],
     };
   if ((m = filename.match(baseRe)))
-    return { channelId: m[2], baseName: m[1].trim(), sortOrder: 0, afterDate: null };
+    return {
+      channelId: m[2],
+      baseName: m[1].trim(),
+      sortOrder: 0,
+      afterDate: null,
+    };
   return {
     channelId: filename,
     baseName: filename.replace(/\.html$/i, ''),
