@@ -59,6 +59,11 @@ export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
       /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
       '[EMAIL]',
     );
+    // D2: match TXT — also redact phone numbers.
+    result = result.replace(
+      /(\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g,
+      '[PHONE]',
+    );
   }
   return result;
 }
