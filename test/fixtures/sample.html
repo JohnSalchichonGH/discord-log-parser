@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <!-- Mirrors DCE MessageGroupTemplate.cshtml: one author per group,
+         header on the first container, short-timestamp on the rest. -->
+    <div class="chatlog__message-group">
+      <div
+        id="chatlog__message-container-1001"
+        class="chatlog__message-container"
+        data-message-id="1001"
+      >
+        <div class="chatlog__message">
+          <div class="chatlog__message-aside">
+            <img class="chatlog__avatar" alt="Avatar" />
+          </div>
+          <div class="chatlog__message-primary">
+            <div class="chatlog__header">
+              <span class="chatlog__author" title="alice#0001" data-user-id="111"
+                >alice</span
+              >
+              <span
+                class="chatlog__timestamp"
+                title="Saturday, July 12, 2025 3:50 AM"
+                ><a href="#">7/12/2025 3:50 AM</a></span
+              >
+            </div>
+            <div class="chatlog__content chatlog__markdown">
+              <span class="chatlog__markdown-preserve">Hello world</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        id="chatlog__message-container-1002"
+        class="chatlog__message-container"
+        data-message-id="1002"
+      >
+        <div class="chatlog__message">
+          <div class="chatlog__message-aside">
+            <div class="chatlog__short-timestamp" title="Saturday, July 12, 2025 3:51 AM">
+              3:51 AM
+            </div>
+          </div>
+          <div class="chatlog__message-primary">
+            <div class="chatlog__content chatlog__markdown">
+              <span class="chatlog__markdown-preserve">a second line</span>
+            </div>
+            <div class="chatlog__attachment">
+              <a href="https://cdn.discordapp.com/attachments/1/2/photo.png">
+                <img
+                  class="chatlog__attachment-media"
+                  src="https://cdn.discordapp.com/attachments/1/2/photo.png"
+                />
+              </a>
+            </div>
+            <div class="chatlog__reactions">
+              <div class="chatlog__reaction" title=":thumbsup:">
+                <img class="chatlog__emoji" alt="👍" />
+                <span class="chatlog__reaction-count">3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chatlog__message-group">
+      <div
+        id="chatlog__message-container-1003"
+        class="chatlog__message-container"
+        data-message-id="1003"
+      >
+        <div class="chatlog__message">
+          <div class="chatlog__message-primary">
+            <div class="chatlog__reply">
+              <div class="chatlog__reply-author" title="alice#0001">alice</div>
+              <div class="chatlog__reply-content">
+                <span class="chatlog__reply-link">Hello world</span>
+              </div>
+            </div>
+            <div class="chatlog__header">
+              <span class="chatlog__author" title="bob#0002" data-user-id="222"
+                >bob</span
+              >
+              <span class="chatlog__timestamp" title="Saturday, July 12, 2025 3:52 AM"
+                ><a href="#">7/12/2025 3:52 AM</a></span
+              >
+            </div>
+            <div class="chatlog__content chatlog__markdown">
+              <span class="chatlog__markdown-preserve">hi alice</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+==============================================================
+Guild: My Server
+Channel: general / chat
+Topic: testing
+==============================================================
+
+[7/12/2025 3:50 AM] alice
+Hello world
+
+[7/12/2025 3:51 AM] alice
+a second line
+
+{Attachments}
+https://cdn.discordapp.com/attachments/1/2/photo.png
+
+{Reactions}
+👍
+
+[7/12/2025 3:52 AM] bob
+hi alice
+
+[7/12/2025 3:53 AM] alice
+joined the server.
+
