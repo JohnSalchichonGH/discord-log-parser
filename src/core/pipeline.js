@@ -36,6 +36,10 @@ export function processGroup(sortedFiles, opts) {
     dateTo,
     keywords,
     useRealNames,
+    // Optional accurate-token budgeting: when both are provided the verify pass
+    // measures real tokens against maxTokens instead of chars against maxChars.
+    countTokens,
+    maxTokens,
   } = opts;
 
   // Phase 1: Build shared userMap
@@ -167,14 +171,22 @@ export function processGroup(sortedFiles, opts) {
   let finalChunks = [...kept, ...keptNormal].sort((a, b) => a.timestamp - b.timestamp);
 
   // A7 verify-and-retrim: measure the actual rendered TXT and drop oldest
-  // non-priority messages until it fits within the budget.
+  // non-priority messages until it fits within the budget. When an accurate
+  // token counter is supplied (B4), measure tokens against maxTokens; otherwise
+  // fall back to the char-based estimate against maxChars.
   const prioritySet = new Set(priorityMsgs);
-  finalChunks = fitToBudget(
-    finalChunks,
-    maxChars,
-    prioritySet,
-    (msgs) => renderTxt(msgs, userMap, Math.round(maxChars / 4), {}).length,
-  );
+  if (countTokens && maxTokens) {
+    finalChunks = fitToBudget(finalChunks, maxTokens, prioritySet, (msgs) =>
+      countTokens(renderTxt(msgs, userMap, maxTokens, {})),
+    );
+  } else {
+    finalChunks = fitToBudget(
+      finalChunks,
+      maxChars,
+      prioritySet,
+      (msgs) => renderTxt(msgs, userMap, Math.round(maxChars / 4), {}).length,
+    );
+  }
 
   // Post-trim: low activity filter
   if (minMsgs > 0) {

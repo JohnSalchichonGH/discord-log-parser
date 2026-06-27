@@ -13,6 +13,12 @@ import { renderTxt } from '../render/txt.js';
 import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
 import { renderCSV } from '../render/csv.js';
+import {
+  countTokens,
+  hasAccurate,
+  enableAccurate,
+  disableAccurate,
+} from '../core/token-config.js';
 
 /* CONSTANTS */
 const BAR_COLORS = [
@@ -69,6 +75,7 @@ function saveSettings() {
       outputFormat: $('outputFormat').value,
       chunkOutput: $('chunkOutput').checked,
       chunkOverlap: $('chunkOverlap').value,
+      useAccurateTokens: $('useAccurateTokens').checked,
     };
     localStorage.setItem('dlp-settings', JSON.stringify(s));
   } catch (e) {}
@@ -91,6 +98,7 @@ function loadSettings() {
     if (s.outputFormat) $('outputFormat').value = s.outputFormat;
     if (s.chunkOutput) $('chunkOutput').checked = s.chunkOutput;
     if (s.chunkOverlap) $('chunkOverlap').value = s.chunkOverlap;
+    if (s.useAccurateTokens) $('useAccurateTokens').checked = s.useAccurateTokens;
     updateTokenLabel();
     $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
     $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
@@ -159,6 +167,23 @@ $('filterLowActivity').addEventListener('change', function () {
 $('chunkOutput').addEventListener('change', function () {
   $('chunkOptions').style.display = this.checked ? 'block' : 'none';
 });
+
+// Accurate tokenizer toggle — present only in the accurate build.
+if (hasAccurate()) {
+  $('accurateTokensRow').style.display = '';
+  $('useAccurateTokens').addEventListener('change', function () {
+    // Start loading early so the counter is ready by preview time.
+    if (this.checked) enableAccurate();
+    else disableAccurate();
+  });
+}
+// Resolve once the selected token counter is loaded (BPE load is async).
+function ensureCounterReady() {
+  const cb = $('useAccurateTokens');
+  if (cb && cb.checked) return enableAccurate();
+  disableAccurate();
+  return Promise.resolve();
+}
 
 $('userFilterHeader').addEventListener('click', function () {
   this.classList.toggle('open');
@@ -491,7 +516,9 @@ function runProcessing() {
   progress.classList.add('active');
   fill.style.width = '10%';
 
-  setTimeout(() => {
+  // Ensure the selected token counter (approx or accurate BPE) is loaded first.
+  ensureCounterReady().then(() => {
+    setTimeout(() => {
     try {
       const groups = buildGroups(loadedFiles.filter((f) => !f.invalid));
       const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
@@ -526,6 +553,8 @@ function runProcessing() {
         dateTo: dateToVal,
         keywords,
         useRealNames: $('useRealNames').checked,
+        countTokens,
+        maxTokens,
       };
 
       fill.style.width = '40%';
@@ -576,8 +605,9 @@ function runProcessing() {
               `\n\n… (${lines.length - maxPreviewLines} more lines)`
             : previewText;
         const chars = previewText.length;
-        const estTokens = Math.round(chars / 4);
-        $('previewInfo').textContent = `${lines.length} lines · ${chars.toLocaleString()} chars · ~${estTokens.toLocaleString()} tokens`;
+        const estTokens = countTokens(previewText);
+        const tokenLabel = $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
+        $('previewInfo').textContent = `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
         $('previewCard').style.display = 'block';
       }
 
@@ -603,7 +633,8 @@ function runProcessing() {
       statusEl.className = 'status-bar error';
       progress.classList.remove('active');
     }
-  }, 80);
+    }, 80);
+  });
 }
 
 function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {

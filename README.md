@@ -220,7 +220,7 @@ Everything runs locally in your browser. No data is sent anywhere. The built `di
 - Timestamp parsing for `.txt` files uses local time (the timezone the export was created in), which matches what Discord showed the user but may differ from UTC.
 - Reactions in `.txt` exports don't include counts (the format doesn't provide them), so they appear as `^{👍}` rather than `^{👍:3}`.
 - Edited message content is not tracked — only the current version at export time is included.
-- The 1 token ≈ 4 characters approximation is a rough average. Actual token count will vary by model and tokeniser.
+- The default build uses the 1 token ≈ 4 characters approximation, a rough average that varies by model and tokeniser. For exact counts, use the accurate build (`dist/index-accurate.html`) and enable "Accurate token counting" — it uses a real BPE tokenizer (GPT cl100k_base), the closest public proxy for current models.
 - System message detection in `.txt` exports is heuristic-based and may not catch all system message variants across Discord locales.
 
 ---
@@ -230,11 +230,21 @@ Everything runs locally in your browser. No data is sent anywhere. The built `di
 The app is developed as ES modules under `src/` and built into a single, dependency-free `dist/index.html` (all JS, CSS, and fonts inlined) so the "double-click to run, no server" experience is preserved.
 
 ```
-npm install      # install dev/build deps (Vite, Vitest, fonts)
-npm run dev      # live dev server with HMR
-npm test         # run the Vitest suite
-npm run build    # produce the standalone dist/index.html
+npm install        # install dev/build deps (Vite, Vitest, fonts, tokenizer)
+npm run dev        # live dev server with HMR
+npm test           # run the Vitest suite
+npm run build      # produce the lean standalone dist/index.html (char/4 estimate)
+npm run build:all  # also build dist/index-accurate.html (bundles a real BPE tokenizer)
 ```
+
+Two builds are produced from the same source:
+
+| File | Size | Token counting |
+|---|---|---|
+| `dist/index.html` | ~265 KB | Fast `1 token ≈ 4 chars` estimate |
+| `dist/index-accurate.html` | ~2.3 MB | Real BPE tokenizer (GPT cl100k_base) behind an opt-in toggle |
+
+A build-time flag dead-code-eliminates the tokenizer from the lean build, so the default file stays small. Use `npm run dev:accurate` to run the accurate variant in dev.
 
 Layout:
 

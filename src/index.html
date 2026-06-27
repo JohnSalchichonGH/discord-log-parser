@@ -129,6 +129,16 @@
           <div class="form-hint">≈ <span id="maxCharsLabel">5.5M</span> characters</div>
         </div>
       </div>
+
+      <!-- Accurate tokenizer toggle (shown only in the accurate build) -->
+      <label class="toggle-row" id="accurateTokensRow" style="display:none;">
+        <input type="checkbox" id="useAccurateTokens">
+        <span class="toggle-switch"></span>
+        <span>
+          <span class="toggle-label">Accurate token counting</span>
+          <span class="toggle-desc">Use a real BPE tokenizer instead of the 1 token ≈ 4 chars estimate</span>
+        </span>
+      </label>
     </div>
 
     <!-- Date Range -->

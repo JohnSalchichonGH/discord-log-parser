@@ -82,4 +82,17 @@ describe('A7: rendered output stays within the budget', () => {
     const { finalChunks } = processGroup(files, opts(1_000_000));
     expect(finalChunks).toHaveLength(5);
   });
+
+  it('fits an accurate token budget when a counter is supplied (B4)', () => {
+    const files = [{ isJson: true, content: sampleJson }];
+    const countTokens = (t) => t.length; // 1 token per char, deterministic
+    const maxTokens = 400;
+    const { finalChunks, userMap } = processGroup(files, {
+      ...opts(1_000_000), // generous char pre-trim; the token verify does the work
+      countTokens,
+      maxTokens,
+    });
+    const measured = countTokens(renderTxt(finalChunks, userMap, maxTokens, {}));
+    expect(measured).toBeLessThanOrEqual(maxTokens);
+  });
 });
