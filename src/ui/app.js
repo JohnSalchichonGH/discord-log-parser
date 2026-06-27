@@ -5,10 +5,10 @@
 import { formatBytes, escHtml } from '../core/format.js';
 import { parseFilename, buildGroups } from '../core/grouping.js';
 import { localDate } from '../core/time.js';
-import { processGroup } from '../core/pipeline.js';
+import { processGroup, getRawMessages } from '../core/pipeline.js';
 import { chunkMessages } from '../core/chunking.js';
-import { parseTxtHeader, parseTxtAuthors } from '../parsers/txt.js';
-import { parseJsonHeader, jsonAuthors } from '../parsers/json.js';
+import { parseTxtHeader } from '../parsers/txt.js';
+import { parseJsonHeader } from '../parsers/json.js';
 import { renderTxt } from '../render/txt.js';
 import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
@@ -413,24 +413,12 @@ function onAllFilesLoaded() {
     });
   });
 
-  // Populate user filter
-  const allNames = new Map(); // name → approx count
+  // Populate user filter from the parse-once cached raw messages (B2), so the
+  // filter list and processing share a single parse per file.
+  const allNames = new Map(); // name → message count
   for (const f of validFiles) {
-    if (f.isJson) {
-      for (const n of jsonAuthors(f.content))
-        allNames.set(n, (allNames.get(n) || 0) + 1);
-    } else if (f.isTxt) {
-      for (const n of parseTxtAuthors(f.content))
-        allNames.set(n, (allNames.get(n) || 0) + 1);
-    } else {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(f.content, 'text/html');
-      doc
-        .querySelectorAll('.chatlog__author, .chatlog__system-notification-author')
-        .forEach((tag) => {
-          const name = tag.textContent.trim();
-          if (name) allNames.set(name, (allNames.get(name) || 0) + 1);
-        });
+    for (const m of getRawMessages(f)) {
+      allNames.set(m.authorName, (allNames.get(m.authorName) || 0) + 1);
     }
   }
   const listUF = $('userFilterList');

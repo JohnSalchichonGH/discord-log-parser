@@ -1,36 +1,16 @@
-// Parser for DCE HTML exports.
-// Extracted verbatim from legacy index.html (MessageGroupTemplate.cshtml structure).
+// Parser for DCE HTML exports. Parses the document ONCE into userMap-independent
+// raw messages (see core/assemble.js); author-id mapping happens later.
 //
-// KNOWN ISSUES (tracked for later phases):
-//  - Uses window.location.href as a URL base, so it is not yet Worker-safe.
+// messageId comes from the clean `data-message-id` snowflake (A3); timestamps
+// are derived from that snowflake's embedded creation time (locale-independent,
+// A1/A8), falling back to the rendered title only for older exports.
 //
-// FIXED: messageId now comes from the clean `data-message-id` snowflake (A3),
-// and timestamps are derived from that snowflake's embedded creation time
-// (locale-independent, A1/A8), falling back to the rendered title only when a
-// snowflake is unavailable (e.g. older exports).
+// Uses window.location.href as a URL base, so it is not yet Worker-safe.
 
 import { parseTimestamp } from '../core/time.js';
 import { snowflakeToDate } from '../core/snowflake.js';
 
-export function collectAuthors(htmlString, userMap, counter) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, 'text/html');
-  doc.querySelectorAll('.chatlog__message-group').forEach((group) => {
-    const tag =
-      group.querySelector('.chatlog__author') ||
-      group.querySelector('.chatlog__system-notification-author');
-    if (tag) {
-      const name = tag.textContent.trim();
-      if (name && !userMap.has(name)) userMap.set(name, `U${counter.value++}`);
-    }
-    group.querySelectorAll('.chatlog__reply-author').forEach((ra) => {
-      const name = ra.textContent.trim();
-      if (name && !userMap.has(name)) userMap.set(name, `U${counter.value++}`);
-    });
-  });
-}
-
-export function extractMessages(htmlString, userMap) {
+export function parseMessages(htmlString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlString, 'text/html');
   const messages = [];
@@ -40,7 +20,6 @@ export function extractMessages(htmlString, userMap) {
       group.querySelector('.chatlog__author') ||
       group.querySelector('.chatlog__system-notification-author');
     const authorName = authorTag ? authorTag.textContent.trim() : 'Unknown';
-    const authorId = userMap.get(authorName) || authorName;
 
     group.querySelectorAll('.chatlog__message-container').forEach((container) => {
       // A3: prefer the clean snowflake in data-message-id; fall back to the
@@ -52,30 +31,30 @@ export function extractMessages(htmlString, userMap) {
 
       // A1/A8: derive an exact UTC instant from the snowflake when possible;
       // otherwise fall back to parsing the locale-dependent timestamp title.
-      let dtObj = snowflakeToDate(messageId);
-      if (!dtObj) {
+      let timestamp = snowflakeToDate(messageId);
+      if (!timestamp) {
         const tsTag = container.querySelector(
           '.chatlog__timestamp, .chatlog__short-timestamp, .chatlog__system-notification-timestamp',
         );
         if (!tsTag || !tsTag.title) return;
-        dtObj = parseTimestamp(tsTag.title);
+        timestamp = parseTimestamp(tsTag.title);
       }
-      if (!dtObj) return;
+      if (!timestamp) return;
 
-      const contentParts = [];
       const isSystem = !!container.querySelector(
         '.chatlog__system-notification-content',
       );
 
       // Reply
+      let replyToName = null,
+        replySnippet = null;
       const replyDiv = container.querySelector('.chatlog__reply');
       if (replyDiv) {
         const rAuthor = replyDiv.querySelector('.chatlog__reply-author');
         if (rAuthor) {
-          const rName = rAuthor.textContent.trim();
-          const rId = userMap.has(rName) ? userMap.get(rName) : rName;
+          replyToName = rAuthor.textContent.trim();
           const rConDiv = replyDiv.querySelector('.chatlog__reply-content');
-          let rSnippet = '…';
+          replySnippet = '…';
           if (rConDiv) {
             const raw = rConDiv.textContent.trim().replace(/\n/g, ' ');
             // A6: both placeholder strings DCE emits for content-less replies.
@@ -83,23 +62,24 @@ export function extractMessages(htmlString, userMap) {
               raw.includes('Click to see original') ||
               raw.includes('Click to see attachment');
             if (raw && !isPlaceholder)
-              rSnippet = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
+              replySnippet = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
           }
-          contentParts.push(`> ${rId}: ${rSnippet}`);
         }
       }
+
+      const parts = [];
 
       // Content
       const sysContent = container.querySelector(
         '.chatlog__system-notification-content',
       );
       if (sysContent) {
-        contentParts.push(`[${sysContent.textContent.trim()}]`);
+        parts.push(`[${sysContent.textContent.trim()}]`);
       } else {
         const msgContent = container.querySelector('.chatlog__markdown-preserve');
         if (msgContent) {
           const text = msgContent.textContent.trim();
-          if (text) contentParts.push(text);
+          if (text) parts.push(text);
         }
       }
 
@@ -113,59 +93,55 @@ export function extractMessages(htmlString, userMap) {
           const fname = pathname.split('/').pop().split('?')[0];
           const ext = fname.split('.').pop().toLowerCase();
           if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext))
-            contentParts.push(`[${ext === 'gif' ? 'GIF' : 'IMG'}: ${fname}]`);
+            parts.push(`[${ext === 'gif' ? 'GIF' : 'IMG'}: ${fname}]`);
           else if (['mp4', 'mov', 'webm'].includes(ext))
-            contentParts.push(`[VID: ${fname}]`);
-          else contentParts.push(`[MEDIA: ${fname}]`);
+            parts.push(`[VID: ${fname}]`);
+          else parts.push(`[MEDIA: ${fname}]`);
         } catch {
-          contentParts.push('[MEDIA: unknown]');
+          parts.push('[MEDIA: unknown]');
         }
       });
 
       // Embeds
       container.querySelectorAll('.chatlog__embed').forEach((embed) => {
         if (embed.querySelector('video')) {
-          contentParts.push('[VID: Embedded Video]');
+          parts.push('[VID: Embedded Video]');
           return;
         }
         const provider = embed.querySelector('.chatlog__embed-provider');
         const title = embed.querySelector('.chatlog__embed-title');
         if (provider && provider.textContent.includes('YouTube'))
-          contentParts.push(`[YT: ${title ? title.textContent.trim() : 'Video'}]`);
-        else if (title) contentParts.push(`[EMBED: ${title.textContent.trim()}]`);
+          parts.push(`[YT: ${title ? title.textContent.trim() : 'Video'}]`);
+        else if (title) parts.push(`[EMBED: ${title.textContent.trim()}]`);
       });
 
       // Stickers
-      if (container.querySelector('.chatlog__sticker'))
-        contentParts.push('[STICKER]');
+      if (container.querySelector('.chatlog__sticker')) parts.push('[STICKER]');
 
       // Reactions
-      const reactions = container.querySelectorAll('.chatlog__reaction');
-      if (reactions.length > 0) {
+      let reactions = null;
+      const reactionEls = container.querySelectorAll('.chatlog__reaction');
+      if (reactionEls.length > 0) {
         const reactList = [];
-        reactions.forEach((r) => {
+        reactionEls.forEach((r) => {
           const img = r.querySelector('img');
           const alt = img ? img.alt : '?';
           const countTag = r.querySelector('.chatlog__reaction-count');
           reactList.push(`${alt}:${countTag ? countTag.textContent.trim() : '1'}`);
         });
-        const formatted = `^{${reactList.join(', ')}}`;
-        if (
-          contentParts.length > 0 &&
-          !contentParts[contentParts.length - 1].startsWith('[')
-        )
-          contentParts[contentParts.length - 1] += ' ' + formatted;
-        else contentParts.push(formatted);
+        reactions = `^{${reactList.join(', ')}}`;
       }
 
-      if (contentParts.length > 0)
+      if (parts.length > 0 || replyToName != null || reactions)
         messages.push({
           messageId,
           authorName,
-          authorId,
-          timestamp: dtObj,
-          contentParts,
+          timestamp,
           isSystem,
+          replyToName,
+          replySnippet,
+          parts,
+          reactions,
         });
     });
   });

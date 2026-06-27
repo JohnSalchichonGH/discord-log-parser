@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { processGroup } from '../src/core/pipeline.js';
+import { processGroup, getRawMessages } from '../src/core/pipeline.js';
 import { renderTxt } from '../src/render/txt.js';
 import { chunkMessages } from '../src/core/chunking.js';
 
@@ -65,6 +65,18 @@ describe('processGroup (TXT)', () => {
     );
     const texts = finalChunks.flatMap((m) => m.contentParts);
     expect(texts.some((t) => t.includes('Hello world'))).toBe(true);
+  });
+});
+
+describe('parse-once memoization (B2)', () => {
+  it('parses each file only once and reuses the cache across reprocessing', () => {
+    const f = { isJson: true, content: sampleJson };
+    const r1 = getRawMessages(f);
+    expect(getRawMessages(f)).toBe(r1); // same reference → not re-parsed
+    // Re-processing (e.g. after a settings change) must not re-parse.
+    processGroup([f], baseOpts());
+    processGroup([f], baseOpts({ maxChars: 5000 }));
+    expect(getRawMessages(f)).toBe(r1);
   });
 });
 

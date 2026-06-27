@@ -5,22 +5,24 @@
 // (date/bots/system/media/whitelist) -> token-budget trim with keyword
 // priority -> post-trim low-activity filter.
 
-import { collectAuthors, extractMessages } from '../parsers/html.js';
-import { collectAuthorsTxt, extractMessagesTxt } from '../parsers/txt.js';
-import { collectAuthorsJson, extractMessagesJson } from '../parsers/json.js';
+import { parseMessages as parseHtml } from '../parsers/html.js';
+import { parseMessages as parseTxt } from '../parsers/txt.js';
+import { parseMessages as parseJson } from '../parsers/json.js';
+import { buildUserMap, assembleMessage } from './assemble.js';
 import { messageCost, legendReserve, fitToBudget } from './budget.js';
 import { renderTxt } from '../render/txt.js';
 
-// Dispatch author-collection / message-extraction by file format.
-function collectAuthorsFor(f, userMap, counter) {
-  if (f.isJson) return collectAuthorsJson(f.content, userMap, counter);
-  if (f.isTxt) return collectAuthorsTxt(f.content, userMap, counter);
-  return collectAuthors(f.content, userMap, counter);
-}
-function extractMessagesFor(f, userMap) {
-  if (f.isJson) return extractMessagesJson(f.content, userMap);
-  if (f.isTxt) return extractMessagesTxt(f.content, userMap);
-  return extractMessages(f.content, userMap);
+// Parse a file's raw (userMap-independent) messages once and memoize them on the
+// file object, so re-processing after a settings change never re-parses (B2).
+export function getRawMessages(f) {
+  if (!f._raw) {
+    f._raw = f.isJson
+      ? parseJson(f.content)
+      : f.isTxt
+        ? parseTxt(f.content)
+        : parseHtml(f.content);
+  }
+  return f._raw;
 }
 
 export function processGroup(sortedFiles, opts) {
@@ -42,23 +44,19 @@ export function processGroup(sortedFiles, opts) {
     maxTokens,
   } = opts;
 
-  // Phase 1: Build shared userMap
-  const userMap = new Map();
-  const counter = { value: 1 };
-  for (const f of sortedFiles) collectAuthorsFor(f, userMap, counter);
+  // Phase 1: parse once (cached), build the shared userMap, assemble messages.
+  const perFileRaw = sortedFiles.map(getRawMessages);
+  const userMap = buildUserMap(perFileRaw, useRealNames);
+  const perFileMsgs = perFileRaw.map((rawList) =>
+    rawList.map((r) => assembleMessage(r, userMap)),
+  );
 
-  // If useRealNames, replace UIDs with the actual display names
-  if (useRealNames) {
-    for (const name of userMap.keys()) userMap.set(name, name);
-  }
-
-  // Phase 2: Extract + deduplicate.
+  // Phase 2: deduplicate.
   // HTML/JSON messages have stable snowflake ids -> exact dedup. TXT messages
   // have none, so we key on timestamp|author|full-content. To avoid collapsing
   // legitimately-repeated short messages (e.g. "ok" twice in the same minute,
   // B5), we allow each keyless message up to the maximum number of times it
   // appears in any single file (true cross-file overlap is still deduped).
-  const perFileMsgs = sortedFiles.map((f) => extractMessagesFor(f, userMap));
   const keylessKey = (m) =>
     `ts:${m.timestamp.getTime()}|${m.authorName}|${m.contentParts.join('')}`;
 

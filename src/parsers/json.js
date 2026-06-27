@@ -1,15 +1,11 @@
-// Parser for DiscordChatExporter JSON exports.
+// Parser for DiscordChatExporter JSON exports. Parses ONCE into userMap-
+// independent raw messages (see core/assemble.js).
 //
-// JSON is the most robust input format: timestamps are ISO-8601 with offset
-// (locale-independent, no native-Date guessing), message ids are clean
-// snowflakes, and the structure is stable. This parser produces the same
-// internal message shape as the HTML/TXT parsers so the rest of the pipeline
-// and all renderers work unchanged:
-//   { messageId, authorName, authorId, timestamp: Date, contentParts, isSystem }
+// JSON is the most robust input format: ISO-8601 timestamps (locale-independent),
+// clean snowflake ids, and a stable structure.
 
 // MessageKind values 1..18 (RecipientAdd..ThreadCreated) are system
 // notifications; Default(0), Reply(19), ThreadStarterMessage(21) are not.
-// Source: DiscordChatExporter Message.IsSystemNotification.
 const SYSTEM_TYPES = new Set([
   'RecipientAdd',
   'RecipientRemove',
@@ -37,8 +33,7 @@ function mediaTokenFromFileName(fileName) {
 
 function embedToken(embed) {
   const title = (embed.title || '').trim();
-  if (embed.video && embed.video.url)
-    return `[VID: ${title || 'Embedded Video'}]`;
+  if (embed.video && embed.video.url) return `[VID: ${title || 'Embedded Video'}]`;
   if (/youtube\.com|youtu\.be/i.test(embed.url || ''))
     return `[YT: ${title || 'Video'}]`;
   if (title) return `[EMBED: ${title}]`;
@@ -69,33 +64,13 @@ export function parseJsonHeader(content) {
   const chan = data.channel?.name || 'unknown';
   const baseName =
     (guild ? guild + ' - ' : '') + (category ? category + ' - ' : '') + chan;
-  // dateRange.after marks a partial export; used for the merge-group badge.
   const afterDate = data.dateRange?.after
     ? String(data.dateRange.after).slice(0, 10)
     : null;
   return { channelId, baseName, afterDate };
 }
 
-// Unique author display names (for the approximate user-filter list).
-export function jsonAuthors(content) {
-  const data = parseJsonExport(content);
-  const names = new Set();
-  for (const m of data.messages) {
-    const name = authorDisplay(m.author);
-    if (name) names.add(name);
-  }
-  return names;
-}
-
-export function collectAuthorsJson(content, userMap, counter) {
-  const data = parseJsonExport(content);
-  for (const m of data.messages) {
-    const name = authorDisplay(m.author);
-    if (name && !userMap.has(name)) userMap.set(name, `U${counter.value++}`);
-  }
-}
-
-export function extractMessagesJson(content, userMap) {
+export function parseMessages(content) {
   const data = parseJsonExport(content);
   const messages = [];
 
@@ -104,72 +79,59 @@ export function extractMessagesJson(content, userMap) {
   for (const m of data.messages) byId.set(m.id, m);
 
   for (const m of data.messages) {
-    const authorName = authorDisplay(m.author);
-    const authorId = userMap.get(authorName) || authorName;
     const isSystem = SYSTEM_TYPES.has(m.type);
-    const contentParts = [];
+    let replyToName = null,
+      replySnippet = null;
 
-    // Reply quote (only when the referenced message is present in the export)
     if (m.type === 'Reply' && m.reference?.messageId) {
       const ref = byId.get(m.reference.messageId);
       if (ref) {
-        const rName = authorDisplay(ref.author);
-        const rId = userMap.has(rName) ? userMap.get(rName) : rName;
+        replyToName = authorDisplay(ref.author);
         let snip = (ref.content || '').replace(/\n/g, ' ').trim();
         if (snip.length > 80) snip = snip.substring(0, 80) + '…';
-        if (!snip) snip = '…';
-        contentParts.push(`> ${rId}: ${snip}`);
+        replySnippet = snip || '…';
       }
     }
 
-    // Text content (system messages carry human fallback text in `content`)
+    const parts = [];
     const text = (m.content || '').trim();
-    if (text) contentParts.push(text);
+    if (text) parts.push(text);
 
-    // Forwarded message content + attachments
     if (m.forwardedMessage) {
       const fwdText = (m.forwardedMessage.content || '').trim();
-      if (fwdText) contentParts.push(fwdText);
+      if (fwdText) parts.push(fwdText);
       for (const att of m.forwardedMessage.attachments || [])
-        if (att.fileName) contentParts.push(mediaTokenFromFileName(att.fileName));
+        if (att.fileName) parts.push(mediaTokenFromFileName(att.fileName));
     }
 
-    // Attachments
     for (const att of m.attachments || [])
-      if (att.fileName) contentParts.push(mediaTokenFromFileName(att.fileName));
+      if (att.fileName) parts.push(mediaTokenFromFileName(att.fileName));
 
-    // Embeds
     for (const embed of m.embeds || []) {
       const tok = embedToken(embed);
-      if (tok) contentParts.push(tok);
+      if (tok) parts.push(tok);
     }
 
-    // Stickers
-    if ((m.stickers || []).length > 0) contentParts.push('[STICKER]');
+    if ((m.stickers || []).length > 0) parts.push('[STICKER]');
 
-    // Reactions: ^{name:count, ...}, merged onto the previous part unless that
-    // part is a media token (starts with "[").
+    let reactions = null;
     if ((m.reactions || []).length > 0) {
       const reactList = m.reactions.map(
         (r) => `${r.emoji?.name ?? '?'}:${r.count ?? 1}`,
       );
-      const formatted = `^{${reactList.join(', ')}}`;
-      if (
-        contentParts.length > 0 &&
-        !contentParts[contentParts.length - 1].startsWith('[')
-      )
-        contentParts[contentParts.length - 1] += ' ' + formatted;
-      else contentParts.push(formatted);
+      reactions = `^{${reactList.join(', ')}}`;
     }
 
-    if (contentParts.length > 0)
+    if (parts.length > 0 || replyToName != null || reactions)
       messages.push({
         messageId: m.id || null,
-        authorName,
-        authorId,
+        authorName: authorDisplay(m.author),
         timestamp: new Date(m.timestamp),
-        contentParts,
         isSystem,
+        replyToName,
+        replySnippet,
+        parts,
+        reactions,
       });
   }
 

@@ -1,28 +1,32 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { collectAuthors, extractMessages } from '../src/parsers/html.js';
+import { parseMessages } from '../src/parsers/html.js';
+import { buildUserMap, assembleMessage } from '../src/core/assemble.js';
 
-// Resolve from the Vitest project root (cwd); under the jsdom environment
-// import.meta.url is an http:// URL and cannot be used for filesystem paths.
 const sampleHtml = readFileSync(
   resolve(process.cwd(), 'test/fixtures/sample.html'),
   'utf8',
 );
 
-describe('collectAuthors', () => {
-  it('assigns short ids to message-group and reply authors', () => {
-    const userMap = new Map();
-    collectAuthors(sampleHtml, userMap, { value: 1 });
+// Parse + assemble a single file into final messages (the pipeline does this
+// across all files; here one file is enough).
+function assembleAll(html) {
+  const raw = parseMessages(html);
+  const userMap = buildUserMap([raw], false);
+  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+}
+
+describe('buildUserMap (HTML authors + reply authors)', () => {
+  it('assigns short ids in document order', () => {
+    const { userMap } = assembleAll(sampleHtml);
     expect(userMap.get('alice')).toBe('U1');
     expect(userMap.get('bob')).toBe('U2');
   });
 });
 
-describe('extractMessages', () => {
-  const userMap = new Map();
-  collectAuthors(sampleHtml, userMap, { value: 1 });
-  const msgs = extractMessages(sampleHtml, userMap);
+describe('parseMessages (HTML)', () => {
+  const { raw, msgs } = assembleAll(sampleHtml);
 
   it('applies the group author to every container in the group', () => {
     // alice has two containers (1001, 1002), bob has one (1003)
@@ -36,30 +40,26 @@ describe('extractMessages', () => {
     expect(msgs[0].contentParts).toContain('Hello world');
   });
 
-  it('renders an attachment as a media token; reaction stays a separate part', () => {
-    // A reaction only merges onto the previous part when that part is not a
-    // media token (does not start with "["); here the previous part is the
-    // attachment token, so the reaction is pushed as its own part.
+  it('renders an attachment token; reaction stays a separate part', () => {
     expect(msgs[1].contentParts).toContain('[IMG: photo.png]');
     expect(msgs[1].contentParts).toContain('^{👍:3}');
   });
 
-  it('captures a reply quote truncated/attributed to the short id', () => {
+  it('captures a reply quote attributed to the short id', () => {
     expect(msgs[2].contentParts[0]).toBe('> U1: Hello world');
   });
 
   it('reads the clean snowflake from data-message-id (A3)', () => {
-    expect(msgs[0].messageId).toBe('1393439224627200000');
+    expect(raw[0].messageId).toBe('1393439224627200000');
   });
 
   it('derives an exact UTC timestamp from the snowflake (A1/A8)', () => {
-    // Locale-independent: comes from the id, not the rendered title text.
     expect(msgs[0].timestamp.toISOString()).toBe('2025-07-12T03:50:00.000Z');
     expect(msgs[2].timestamp.toISOString()).toBe('2025-07-12T03:52:00.000Z');
   });
 });
 
-describe('extractMessages — reply placeholders (A6)', () => {
+describe('parseMessages — reply placeholders (A6)', () => {
   it('does not leak "Click to see attachment" into the reply snippet', () => {
     const html = `
       <div class="chatlog__message-group">
@@ -71,23 +71,19 @@ describe('extractMessages — reply placeholders (A6)', () => {
                 <span class="chatlog__reply-link"><em>Click to see attachment</em><span>🖼️</span></span>
               </div>
             </div>
-            <div class="chatlog__header">
-              <span class="chatlog__author">bob</span>
-            </div>
+            <div class="chatlog__header"><span class="chatlog__author">bob</span></div>
             <div class="chatlog__markdown-preserve">replying</div>
           </div>
         </div>
       </div>`;
-    const userMap = new Map();
-    collectAuthors(html, userMap, { value: 1 });
-    const msgs = extractMessages(html, userMap);
+    const { msgs } = assembleAll(html);
     // bob (group author) -> U1; alice (reply author) -> U2.
     expect(msgs[0].contentParts[0]).toBe('> U2: …');
     expect(msgs[0].contentParts[0]).not.toContain('Click to see');
   });
 });
 
-describe('extractMessages — timestamp fallback', () => {
+describe('parseMessages — timestamp fallback', () => {
   it('falls back to the title when no snowflake id is present', () => {
     const html = `
       <div class="chatlog__message-group">
@@ -99,9 +95,7 @@ describe('extractMessages — timestamp fallback', () => {
           <div class="chatlog__markdown-preserve">legacy export</div>
         </div>
       </div>`;
-    const userMap = new Map();
-    collectAuthors(html, userMap, { value: 1 });
-    const msgs = extractMessages(html, userMap);
+    const { msgs } = assembleAll(html);
     expect(msgs).toHaveLength(1);
     expect(msgs[0].timestamp).toBeInstanceOf(Date);
     expect(isNaN(msgs[0].timestamp)).toBe(false);

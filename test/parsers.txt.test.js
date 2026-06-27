@@ -2,19 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  parseMessages,
   parseTxtHeader,
-  parseTxtAuthors,
-  collectAuthorsTxt,
-  extractMessagesTxt,
   isTxtSystemMessage,
 } from '../src/parsers/txt.js';
+import { buildUserMap, assembleMessage } from '../src/core/assemble.js';
 
-// Resolve from the Vitest project root (cwd); under the jsdom environment
-// import.meta.url is an http:// URL and cannot be used for filesystem paths.
 const sampleTxt = readFileSync(
   resolve(process.cwd(), 'test/fixtures/sample.txt'),
   'utf8',
 );
+
+function parse(content) {
+  const raw = parseMessages(content);
+  const userMap = buildUserMap([raw], false);
+  return { userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+}
 
 describe('parseTxtHeader', () => {
   it('derives channelId and baseName from Guild/Channel header lines', () => {
@@ -24,16 +27,8 @@ describe('parseTxtHeader', () => {
   });
 });
 
-describe('parseTxtAuthors', () => {
-  it('collects the distinct author names', () => {
-    expect([...parseTxtAuthors(sampleTxt)].sort()).toEqual(['alice', 'bob']);
-  });
-});
-
-describe('extractMessagesTxt', () => {
-  const userMap = new Map();
-  collectAuthorsTxt(sampleTxt, userMap, { value: 1 });
-  const msgs = extractMessagesTxt(sampleTxt, userMap);
+describe('parseMessages (TXT)', () => {
+  const { userMap, msgs } = parse(sampleTxt);
 
   it('assigns sequential short ids in first-seen order', () => {
     expect(userMap.get('alice')).toBe('U1');
@@ -47,11 +42,9 @@ describe('extractMessagesTxt', () => {
     expect(msgs[0].timestamp).toBeInstanceOf(Date);
   });
 
-  it('renders attachments as media tokens and appends reactions inline', () => {
-    const second = msgs[1];
-    expect(second.contentParts).toContain('[IMG: photo.png]');
-    // reaction has no count in TXT, so it is just the emoji
-    expect(second.contentParts.some((p) => p.startsWith('^{'))).toBe(true);
+  it('renders attachments as media tokens and keeps the reaction separate', () => {
+    expect(msgs[1].contentParts).toContain('[IMG: photo.png]');
+    expect(msgs[1].contentParts.some((p) => p.startsWith('^{'))).toBe(true);
   });
 
   it('flags "joined the server." as a system message', () => {
@@ -60,37 +53,26 @@ describe('extractMessagesTxt', () => {
   });
 });
 
-// A9 FIXED: the postamble separator now terminates the final message so the
-// "Exported N message(s)" footer is not slurped into its body.
 describe('TXT postamble handling (A9)', () => {
-  const withPostamble = [
-    '[7/12/2025 3:50 AM] alice',
-    'last message',
-    '',
-    '==============================================================',
-    'Exported 1 message(s)',
-    '==============================================================',
-    '',
-  ].join('\n');
-
   it('does not slurp the postamble into the final message body', () => {
-    const userMap = new Map();
-    collectAuthorsTxt(withPostamble, userMap, { value: 1 });
-    const msgs = extractMessagesTxt(withPostamble, userMap);
+    const content = [
+      '[7/12/2025 3:50 AM] alice',
+      'last message',
+      '',
+      '==============================================================',
+      'Exported 1 message(s)',
+      '==============================================================',
+      '',
+    ].join('\n');
+    const { msgs } = parse(content);
     expect(msgs).toHaveLength(1);
     expect(msgs[0].contentParts).toEqual(['last message']);
   });
 });
 
 describe('TXT stickers / forwarded / blockquote handling', () => {
-  function parse(text) {
-    const userMap = new Map();
-    collectAuthorsTxt(text, userMap, { value: 1 });
-    return extractMessagesTxt(text, userMap);
-  }
-
   it('emits a [STICKER] token per {Stickers} url (A5)', () => {
-    const msgs = parse(
+    const { msgs } = parse(
       [
         '[7/12/2025 3:50 AM] alice',
         'nice',
@@ -104,7 +86,7 @@ describe('TXT stickers / forwarded / blockquote handling', () => {
   });
 
   it('keeps forwarded content but drops the metadata line (A5)', () => {
-    const msgs = parse(
+    const { msgs } = parse(
       [
         '[7/12/2025 3:50 AM] alice',
         '',
@@ -121,13 +103,11 @@ describe('TXT stickers / forwarded / blockquote handling', () => {
   });
 
   it('keeps a markdown blockquote as body text, not a reply (A4)', () => {
-    const msgs = parse(
+    const { msgs } = parse(
       ['[7/12/2025 3:50 AM] alice', '> someone said: hello there', 'my reply'].join(
         '\n',
       ),
     );
-    // The "> someone said: …" line is preserved verbatim, not turned into a
-    // "> Uxx: …" reply attribution.
     expect(msgs[0].contentParts[0]).toContain('> someone said: hello there');
     expect(msgs[0].contentParts[0]).toContain('my reply');
   });

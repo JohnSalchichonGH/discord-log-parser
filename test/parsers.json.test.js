@@ -2,17 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  parseMessages,
   parseJsonExport,
   parseJsonHeader,
-  jsonAuthors,
-  collectAuthorsJson,
-  extractMessagesJson,
 } from '../src/parsers/json.js';
+import { buildUserMap, assembleMessage } from '../src/core/assemble.js';
 
 const sampleJson = readFileSync(
   resolve(process.cwd(), 'test/fixtures/sample.json'),
   'utf8',
 );
+
+function parse(content) {
+  const raw = parseMessages(content);
+  const userMap = buildUserMap([raw], false);
+  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+}
 
 describe('parseJsonExport', () => {
   it('throws a clear error on malformed JSON', () => {
@@ -32,32 +37,21 @@ describe('parseJsonHeader', () => {
   });
 });
 
-describe('jsonAuthors / collectAuthorsJson', () => {
-  it('lists distinct display names (nickname fallback)', () => {
-    expect([...jsonAuthors(sampleJson)].sort()).toEqual([
-      'CarolBot',
-      'alice',
-      'bob',
-    ]);
-  });
-  it('assigns short ids in first-seen order', () => {
-    const userMap = new Map();
-    collectAuthorsJson(sampleJson, userMap, { value: 1 });
+describe('buildUserMap (JSON authors)', () => {
+  it('assigns short ids in first-seen order (nickname fallback)', () => {
+    const { userMap } = parse(sampleJson);
     expect(userMap.get('alice')).toBe('U1');
     expect(userMap.get('bob')).toBe('U2');
     expect(userMap.get('CarolBot')).toBe('U3');
   });
 });
 
-describe('extractMessagesJson', () => {
-  const userMap = new Map();
-  collectAuthorsJson(sampleJson, userMap, { value: 1 });
-  const msgs = extractMessagesJson(sampleJson, userMap);
+describe('parseMessages (JSON)', () => {
+  const { raw, msgs } = parse(sampleJson);
 
   it('extracts every message with clean ids and ISO timestamps', () => {
     expect(msgs).toHaveLength(5);
-    expect(msgs[0].messageId).toBe('1001');
-    // ISO-8601 parses to an exact UTC instant regardless of locale.
+    expect(raw[0].messageId).toBe('1001');
     expect(msgs[0].timestamp.toISOString()).toBe('2025-07-12T03:50:00.000Z');
   });
 
