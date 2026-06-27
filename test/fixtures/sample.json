@@ -1,0 +1,98 @@
+{
+  "guild": { "id": "900", "name": "My Server", "iconUrl": "" },
+  "channel": {
+    "id": "123456789",
+    "type": "GuildTextChat",
+    "categoryId": "10",
+    "category": "text",
+    "name": "general",
+    "topic": "testing"
+  },
+  "dateRange": { "after": null, "before": null },
+  "exportedAt": "2025-07-12T10:00:00+00:00",
+  "messages": [
+    {
+      "id": "1001",
+      "type": "Default",
+      "timestamp": "2025-07-12T03:50:00+00:00",
+      "timestampEdited": null,
+      "isPinned": false,
+      "content": "Hello world",
+      "author": {
+        "id": "111",
+        "name": "alice",
+        "discriminator": "0001",
+        "nickname": "alice",
+        "isBot": false
+      },
+      "attachments": [],
+      "embeds": [],
+      "stickers": [],
+      "reactions": []
+    },
+    {
+      "id": "1002",
+      "type": "Default",
+      "timestamp": "2025-07-12T03:51:00+00:00",
+      "isPinned": false,
+      "content": "a second line",
+      "author": { "id": "111", "name": "alice", "nickname": "alice", "isBot": false },
+      "attachments": [
+        {
+          "id": "5",
+          "url": "https://cdn.discordapp.com/attachments/1/2/photo.png",
+          "fileName": "photo.png",
+          "fileSizeBytes": 1234
+        }
+      ],
+      "embeds": [],
+      "stickers": [],
+      "reactions": [
+        { "emoji": { "id": null, "name": "👍", "code": "thumbsup" }, "count": 3 }
+      ]
+    },
+    {
+      "id": "1003",
+      "type": "Reply",
+      "timestamp": "2025-07-12T03:52:00+00:00",
+      "isPinned": false,
+      "content": "hi alice",
+      "author": { "id": "222", "name": "bob", "nickname": "bob", "isBot": false },
+      "attachments": [],
+      "embeds": [],
+      "stickers": [],
+      "reactions": [],
+      "reference": { "type": "Default", "messageId": "1001", "channelId": "123456789" }
+    },
+    {
+      "id": "1004",
+      "type": "GuildMemberJoin",
+      "timestamp": "2025-07-12T03:53:00+00:00",
+      "isPinned": false,
+      "content": "Joined the server.",
+      "author": { "id": "222", "name": "bob", "nickname": "bob", "isBot": false },
+      "attachments": [],
+      "embeds": [],
+      "stickers": [],
+      "reactions": []
+    },
+    {
+      "id": "1005",
+      "type": "Default",
+      "timestamp": "2025-07-12T03:54:00+00:00",
+      "isPinned": false,
+      "content": "look at this",
+      "author": { "id": "333", "name": "carolbot", "nickname": "CarolBot", "isBot": true },
+      "attachments": [],
+      "embeds": [
+        {
+          "title": "Never Gonna Give You Up",
+          "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        }
+      ],
+      "stickers": [],
+      "reactions": []
+    }
+  ],
+  "messageCount": 5
+}

@@ -48,4 +48,32 @@ describe('UI wiring smoke test', () => {
     cb.dispatchEvent(new window.Event('change'));
     expect(document.getElementById('minMsgRow').style.display).toBe('block');
   });
+
+  it('loads a DCE JSON export through the file input (A2 wiring)', async () => {
+    const json = readFileSync(
+      resolve(process.cwd(), 'test/fixtures/sample.json'),
+      'utf8',
+    );
+    const input = document.getElementById('fileInput');
+    const file = new File([json], 'My Server - general [123456789].json', {
+      type: 'application/json',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new window.Event('change'));
+
+    await waitFor(() => document.getElementById('toStep2').disabled === false);
+
+    expect(document.querySelector('.file-name').textContent).toContain('.json');
+    // No invalid/error badge for a well-formed export.
+    expect(document.querySelector('.file-item span[style*="danger"]')).toBeNull();
+  });
 });
+
+async function waitFor(fn, timeout = 2000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    if (fn()) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error('waitFor timed out');
+}

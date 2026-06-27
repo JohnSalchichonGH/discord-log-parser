@@ -8,6 +8,7 @@ import { localDate } from '../core/time.js';
 import { processGroup } from '../core/pipeline.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader, parseTxtAuthors } from '../parsers/txt.js';
+import { parseJsonHeader, jsonAuthors } from '../parsers/json.js';
 import { renderTxt } from '../render/txt.js';
 import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
@@ -202,11 +203,10 @@ const fileInput = $('fileInput');
   });
 });
 dropZone.addEventListener('drop', (e) => {
-  const files = Array.from(e.dataTransfer.files).filter(
-    (f) =>
-      f.name.toLowerCase().endsWith('.html') ||
-      f.name.toLowerCase().endsWith('.txt'),
-  );
+  const files = Array.from(e.dataTransfer.files).filter((f) => {
+    const n = f.name.toLowerCase();
+    return n.endsWith('.html') || n.endsWith('.txt') || n.endsWith('.json');
+  });
   if (files.length) addFiles(files);
 });
 fileInput.addEventListener('change', (e) => {
@@ -222,32 +222,68 @@ function addFiles(files) {
       if (--pending === 0) onAllFilesLoaded();
       return;
     }
-    const isTxt = file.name.toLowerCase().endsWith('.txt');
+    const lower = file.name.toLowerCase();
+    const isTxt = lower.endsWith('.txt');
+    const isJson = lower.endsWith('.json');
     const meta = isTxt
       ? { channelId: file.name, baseName: file.name.replace(/\.txt$/i, ''), afterDate: null }
-      : parseFilename(file.name);
+      : isJson
+        ? { channelId: file.name, baseName: file.name.replace(/\.json$/i, ''), afterDate: null }
+        : parseFilename(file.name);
     const reader = new FileReader();
     reader.onload = function (e) {
       const content = e.target.result;
+      let invalid = false,
+        error = null;
       if (isTxt) {
         const hdr = parseTxtHeader(content);
         meta.channelId = hdr.channelId;
         meta.baseName = hdr.baseName;
+      } else if (isJson) {
+        // JSON is validated at load time so malformed files surface loudly
+        // (E2) instead of silently producing nothing.
+        try {
+          const hdr = parseJsonHeader(content);
+          meta.channelId = hdr.channelId;
+          meta.baseName = hdr.baseName;
+          meta.afterDate = hdr.afterDate;
+        } catch (err) {
+          invalid = true;
+          error = err.message;
+        }
       }
       loadedFiles.push({
         name: file.name,
         isTxt,
+        isJson,
         content,
         channelId: meta.channelId,
         baseName: meta.baseName,
         sortOrder: file.lastModified,
         afterDate: meta.afterDate,
         size: file.size,
+        invalid,
+        error,
       });
       if (--pending === 0) onAllFilesLoaded();
     };
-    // KNOWN BUG (B1): no reader.onerror, so a failed read leaves `pending`
-    // stuck and onAllFilesLoaded never fires. Fixed in Phase 1.
+    // B1: a failed read must not leave `pending` stuck; record it and continue.
+    reader.onerror = function () {
+      loadedFiles.push({
+        name: file.name,
+        isTxt,
+        isJson,
+        content: '',
+        channelId: file.name,
+        baseName: file.name,
+        sortOrder: file.lastModified,
+        afterDate: null,
+        size: file.size,
+        invalid: true,
+        error: 'Could not read file.',
+      });
+      if (--pending === 0) onAllFilesLoaded();
+    };
     reader.readAsText(file);
   });
 }
@@ -272,8 +308,8 @@ function renderDropZoneEmpty() {
       <line x1="12" y1="3" x2="12" y2="15"/>
     </svg>
     <div class="drop-label">Drop files here or click to browse</div>
-    <div class="drop-hint">.html or .txt files from DiscordChatExporter</div>
-    <input type="file" id="fileInput" accept=".html,.txt" multiple>
+    <div class="drop-hint">.json, .html, or .txt files from DiscordChatExporter</div>
+    <input type="file" id="fileInput" accept=".html,.txt,.json" multiple>
   `;
   const newInput = dropZone.querySelector('input');
   newInput.addEventListener('change', (e) => {
@@ -290,14 +326,20 @@ function onAllFilesLoaded() {
   loadedFiles.forEach((f, i) => {
     const item = document.createElement('div');
     item.className = 'file-item';
+    const errNote = f.invalid
+      ? `<span class="file-size" style="color:var(--danger);" title="${escHtml(f.error || 'Invalid file')}">⚠ ${escHtml(f.error || 'Invalid file')}</span>`
+      : `<span class="file-size">${formatBytes(f.size)}</span>`;
     item.innerHTML = `
       <svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       <span class="file-name">${escHtml(f.name)}</span>
-      <span class="file-size">${formatBytes(f.size)}</span>
+      ${errNote}
       <button class="file-remove" data-idx="${i}" title="Remove">✕</button>
     `;
     listEl.appendChild(item);
   });
+
+  // Only valid files take part in grouping, author collection, and processing.
+  const validFiles = loadedFiles.filter((f) => !f.invalid);
   listEl.querySelectorAll('.file-remove').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -306,7 +348,7 @@ function onAllFilesLoaded() {
   });
 
   // Merge groups preview
-  const groups = buildGroups(loadedFiles);
+  const groups = buildGroups(validFiles);
   const mgEl = $('mergeGroups');
   mgEl.innerHTML = '';
   const groupKeys = [];
@@ -348,8 +390,11 @@ function onAllFilesLoaded() {
 
   // Populate user filter
   const allNames = new Map(); // name → approx count
-  for (const f of loadedFiles) {
-    if (f.isTxt) {
+  for (const f of validFiles) {
+    if (f.isJson) {
+      for (const n of jsonAuthors(f.content))
+        allNames.set(n, (allNames.get(n) || 0) + 1);
+    } else if (f.isTxt) {
       for (const n of parseTxtAuthors(f.content))
         allNames.set(n, (allNames.get(n) || 0) + 1);
     } else {
@@ -398,7 +443,8 @@ function onAllFilesLoaded() {
 
   dropZone.classList.add('has-files');
   $('fileListContainer').style.display = 'block';
-  $('toStep2').disabled = false;
+  // Can only continue if at least one valid file loaded.
+  $('toStep2').disabled = validFiles.length === 0;
 }
 
 /* MANUAL GROUP MERGING */
@@ -447,7 +493,7 @@ function runProcessing() {
 
   setTimeout(() => {
     try {
-      const groups = buildGroups(loadedFiles);
+      const groups = buildGroups(loadedFiles.filter((f) => !f.invalid));
       const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
       const maxChars = maxTokens * 4;
       const doFilter = $('filterLowActivity').checked;
@@ -540,8 +586,16 @@ function runProcessing() {
         progress.classList.remove('active');
         fill.style.width = '0%';
       }, 600);
-      statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
-      statusEl.className = 'status-bar success';
+      if (totalMessages === 0) {
+        // E2: a silent empty result usually means the parser couldn't read the
+        // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
+        statusEl.textContent =
+          'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
+        statusEl.className = 'status-bar error';
+      } else {
+        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
+        statusEl.className = 'status-bar success';
+      }
       $('toStep4').disabled = false;
     } catch (err) {
       console.error(err);

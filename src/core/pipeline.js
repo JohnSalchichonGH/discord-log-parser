@@ -7,6 +7,19 @@
 
 import { collectAuthors, extractMessages } from '../parsers/html.js';
 import { collectAuthorsTxt, extractMessagesTxt } from '../parsers/txt.js';
+import { collectAuthorsJson, extractMessagesJson } from '../parsers/json.js';
+
+// Dispatch author-collection / message-extraction by file format.
+function collectAuthorsFor(f, userMap, counter) {
+  if (f.isJson) return collectAuthorsJson(f.content, userMap, counter);
+  if (f.isTxt) return collectAuthorsTxt(f.content, userMap, counter);
+  return collectAuthors(f.content, userMap, counter);
+}
+function extractMessagesFor(f, userMap) {
+  if (f.isJson) return extractMessagesJson(f.content, userMap);
+  if (f.isTxt) return extractMessagesTxt(f.content, userMap);
+  return extractMessages(f.content, userMap);
+}
 
 export function processGroup(sortedFiles, opts) {
   const {
@@ -26,10 +39,7 @@ export function processGroup(sortedFiles, opts) {
   // Phase 1: Build shared userMap
   const userMap = new Map();
   const counter = { value: 1 };
-  for (const f of sortedFiles)
-    f.isTxt
-      ? collectAuthorsTxt(f.content, userMap, counter)
-      : collectAuthors(f.content, userMap, counter);
+  for (const f of sortedFiles) collectAuthorsFor(f, userMap, counter);
 
   // If useRealNames, replace UIDs with the actual display names
   if (useRealNames) {
@@ -40,9 +50,7 @@ export function processGroup(sortedFiles, opts) {
   const seen = new Set();
   const allMessages = [];
   for (const f of sortedFiles) {
-    const msgs = f.isTxt
-      ? extractMessagesTxt(f.content, userMap)
-      : extractMessages(f.content, userMap);
+    const msgs = extractMessagesFor(f, userMap);
     for (const msg of msgs) {
       const key = msg.messageId
         ? `id:${msg.messageId}`

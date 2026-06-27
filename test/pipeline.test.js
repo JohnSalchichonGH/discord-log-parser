@@ -8,6 +8,7 @@ import { chunkMessages } from '../src/core/chunking.js';
 const read = (p) => readFileSync(resolve(process.cwd(), p), 'utf8');
 const sampleHtml = read('test/fixtures/sample.html');
 const sampleTxt = read('test/fixtures/sample.txt');
+const sampleJson = read('test/fixtures/sample.json');
 
 // Default opts with all filters off; large budget so nothing is trimmed.
 function baseOpts(over = {}) {
@@ -64,6 +65,41 @@ describe('processGroup (TXT)', () => {
     );
     const texts = finalChunks.flatMap((m) => m.contentParts);
     expect(texts.some((t) => t.includes('Hello world'))).toBe(true);
+  });
+});
+
+describe('processGroup (JSON)', () => {
+  it('extracts all messages with locale-independent timestamps', () => {
+    const files = [{ isJson: true, content: sampleJson }];
+    const { finalChunks, userMap, allMessagesCount } = processGroup(files, baseOpts());
+    expect(allMessagesCount).toBe(5);
+    expect(finalChunks).toHaveLength(5);
+    expect(userMap.get('alice')).toBe('U1');
+    expect(finalChunks[0].timestamp.toISOString()).toBe('2025-07-12T03:50:00.000Z');
+  });
+
+  it('drops system messages when filterSystem is on', () => {
+    const files = [{ isJson: true, content: sampleJson }];
+    const { finalChunks } = processGroup(files, baseOpts({ filterSystem: true }));
+    expect(finalChunks).toHaveLength(4); // GuildMemberJoin removed
+  });
+
+  it('excludes bot messages when the author is tagged as a bot', () => {
+    const files = [{ isJson: true, content: sampleJson }];
+    const { finalChunks } = processGroup(
+      files,
+      baseOpts({ filterBots: true, botSet: new Set(['CarolBot']) }),
+    );
+    expect(finalChunks.some((m) => m.authorName === 'CarolBot')).toBe(false);
+  });
+
+  it('renders to the LLM-optimized format end-to-end', () => {
+    const files = [{ isJson: true, content: sampleJson }];
+    const { finalChunks, userMap } = processGroup(files, baseOpts());
+    const out = renderTxt(finalChunks, userMap, 200000, {});
+    expect(out).toContain('# U1: alice');
+    expect(out).toContain('Hello world');
+    expect(out).toContain('> U1: Hello world'); // reply preserved
   });
 });
 
