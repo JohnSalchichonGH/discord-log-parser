@@ -395,7 +395,7 @@ function onAllFilesLoaded() {
         minute: '2-digit',
       });
       const badge = f.afterDate
-        ? `<span class="badge badge-dated">after ${f.afterDate}</span>`
+        ? `<span class="badge badge-dated">after ${escHtml(f.afterDate)}</span>`
         : `<span class="badge badge-base">mod: ${modDate}</span>`;
       html += `<div class="merge-file">${escHtml(f.name)} ${badge}</div>`;
     }
@@ -672,7 +672,7 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
     const pct = Math.max(2, (count / maxCount) * 100);
     const color = BAR_COLORS[i % BAR_COLORS.length];
     chartHtml += `<div class="chart-bar-row">
-      <span class="chart-bar-label">${uid}</span>
+      <span class="chart-bar-label">${escHtml(uid)}</span>
       <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${count}</div></div>
     </div>`;
   });
@@ -695,7 +695,7 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
     const color = BAR_COLORS[i % BAR_COLORS.length];
     const tokens = Math.round(b.chars / 4);
     budgetHtml += `<div class="chart-bar-row">
-      <span class="chart-bar-label">${b.uid}</span>
+      <span class="chart-bar-label">${escHtml(b.uid)}</span>
       <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${tokens.toLocaleString()} tkn</div></div>
     </div>`;
   });

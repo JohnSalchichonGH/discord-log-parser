@@ -211,7 +211,7 @@ All configuration — token limit, model preset, filter states, redaction toggle
 
 ## Privacy
 
-Everything runs locally in your browser. No data is sent anywhere. The built `dist/index.html` makes **zero network requests** — fonts are self-hosted and inlined, there is no analytics, and there are no runtime external dependencies.
+Everything runs locally in your browser. No data is sent anywhere. The built `dist/index.html` makes **zero network requests** — fonts are self-hosted and inlined, there is no analytics, and there are no runtime external dependencies. The build also embeds a strict Content-Security-Policy (`connect-src 'none'`) that blocks any network access at the browser level, and all untrusted export content is HTML-escaped before display.
 
 ---
 

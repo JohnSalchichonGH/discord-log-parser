@@ -67,6 +67,51 @@ describe('UI wiring smoke test', () => {
     // No invalid/error badge for a well-formed export.
     expect(document.querySelector('.file-item span[style*="danger"]')).toBeNull();
   });
+
+  it('escapes malicious usernames in the stats chart (D1/XSS)', async () => {
+    window.scrollTo = () => {}; // jsdom doesn't implement it; goToStep calls it
+    const evil = '<img src=x onerror="window.__xss=1">';
+    const json = JSON.stringify({
+      guild: { id: '9', name: 'G' },
+      channel: { id: '999', name: 'evil' },
+      dateRange: { after: null, before: null },
+      messages: [
+        {
+          id: '1',
+          type: 'Default',
+          timestamp: '2025-07-12T03:50:00+00:00',
+          content: 'hi',
+          author: { id: '1', name: 'u', nickname: evil, isBot: false },
+          attachments: [],
+          embeds: [],
+          stickers: [],
+          reactions: [],
+        },
+      ],
+      messageCount: 1,
+    });
+    const input = document.getElementById('fileInput');
+    Object.defineProperty(input, 'files', {
+      value: [new File([json], 'G - evil [999].json', { type: 'application/json' })],
+      configurable: true,
+    });
+    input.dispatchEvent(new window.Event('change'));
+    await waitFor(() => document.getElementById('toStep2').disabled === false);
+
+    document.getElementById('useRealNames').checked = true; // uid becomes the name
+    document.getElementById('filterLowActivity').checked = false; // keep the 1-msg user
+    document.getElementById('toStep2').click();
+    document.getElementById('toStep3').click();
+    await waitFor(
+      () => document.getElementById('statsCard').style.display === 'block',
+      4000,
+    );
+
+    const chartHtml = document.getElementById('userChart').innerHTML;
+    expect(window.__xss).toBeUndefined();
+    expect(chartHtml).not.toContain('<img src=x onerror');
+    expect(chartHtml).toContain('&lt;img');
+  });
 });
 
 async function waitFor(fn, timeout = 2000) {
