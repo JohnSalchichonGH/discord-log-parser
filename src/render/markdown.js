@@ -1,6 +1,6 @@
 // Renderer for Markdown output. Extracted verbatim from legacy index.html.
 
-import { formatAMPM } from '../core/time.js';
+import { formatAMPMUtc, formatDayDividerUtc, utcDayKey } from '../core/time.js';
 
 export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
   if (finalChunks.length === 0) return 'No messages found.';
@@ -37,19 +37,13 @@ export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
 
   let lastDate = null;
   for (const chunk of finalChunks) {
-    const curDate = chunk.timestamp.toDateString();
+    const curDate = utcDayKey(chunk.timestamp);
     if (lastDate !== curDate) {
-      const dayFmt = chunk.timestamp.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-      });
-      out.push(`## ${dayFmt}`);
+      out.push(`## ${formatDayDividerUtc(chunk.timestamp)}`);
       out.push('');
       lastDate = curDate;
     }
-    const time = formatAMPM(chunk.timestamp);
+    const time = formatAMPMUtc(chunk.timestamp);
     const aid = chunk.authorId;
     out.push(`**[${time}] ${aid}:**`);
     chunk.contentParts.forEach((p) => {

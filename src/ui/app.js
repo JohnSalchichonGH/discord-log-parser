@@ -613,10 +613,12 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
+          timeZone: 'UTC',
         })} — ${chunks[chunks.length - 1].timestamp.toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
+          timeZone: 'UTC',
         })}`
       : 'N/A';
   const uniqueUsers = new Set(chunks.map((c) => c.authorId)).size;

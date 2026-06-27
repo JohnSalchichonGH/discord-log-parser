@@ -4,7 +4,9 @@ import {
   localDate,
   formatTimeDelta,
   formatLongDuration,
-  formatAMPM,
+  formatAMPMUtc,
+  utcDayKey,
+  formatDayDividerUtc,
 } from '../src/core/time.js';
 
 describe('parseTimestamp', () => {
@@ -73,11 +75,23 @@ describe('formatLongDuration', () => {
   });
 });
 
-describe('formatAMPM', () => {
-  it('formats a 12-hour clock with zero-padded minutes', () => {
-    expect(formatAMPM(new Date(2025, 0, 1, 3, 5))).toBe('3:05 AM');
-    expect(formatAMPM(new Date(2025, 0, 1, 0, 0))).toBe('12:00 AM');
-    expect(formatAMPM(new Date(2025, 0, 1, 12, 0))).toBe('12:00 PM');
-    expect(formatAMPM(new Date(2025, 0, 1, 23, 59))).toBe('11:59 PM');
+describe('formatAMPMUtc', () => {
+  it('formats a 12-hour UTC clock with zero-padded minutes', () => {
+    expect(formatAMPMUtc(new Date('2025-01-01T03:05:00Z'))).toBe('3:05 AM');
+    expect(formatAMPMUtc(new Date('2025-01-01T00:00:00Z'))).toBe('12:00 AM');
+    expect(formatAMPMUtc(new Date('2025-01-01T12:00:00Z'))).toBe('12:00 PM');
+    expect(formatAMPMUtc(new Date('2025-01-01T23:59:00Z'))).toBe('11:59 PM');
+  });
+  it('is viewer-timezone independent', () => {
+    // Same instant always formats the same regardless of the host timezone.
+    expect(formatAMPMUtc(new Date('2025-07-12T03:50:00Z'))).toBe('3:50 AM');
+  });
+});
+
+describe('utcDayKey / formatDayDividerUtc', () => {
+  it('keys and labels by the UTC calendar day', () => {
+    const d = new Date('2025-07-12T23:30:00Z');
+    expect(utcDayKey(d)).toBe('2025-07-12');
+    expect(formatDayDividerUtc(d)).toBe('Saturday, Jul 12, 2025');
   });
 });

@@ -119,6 +119,11 @@ describe('renderTxt (end-to-end)', () => {
     expect(out).toContain('Hello world');
   });
 
+  it('renders the first message clock in UTC (deterministic)', () => {
+    // sample.html message 1 is 2025-07-12T03:50:00Z -> always "[3:50 AM]".
+    expect(out).toContain('[3:50 AM] U1:');
+  });
+
   it('anonymizes the legend when redactNames is set', () => {
     const red = renderTxt(finalChunks, userMap, 200000, { redactNames: true });
     expect(red).toContain('# U1: (');

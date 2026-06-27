@@ -7,9 +7,11 @@
 import {
   ABSOLUTE_TIME_THRESHOLD,
   SESSION_BREAK_THRESHOLD,
-  formatAMPM,
+  formatAMPMUtc,
+  formatDayDividerUtc,
   formatLongDuration,
   formatTimeDelta,
+  utcDayKey,
 } from '../core/time.js';
 
 export function renderTxt(finalChunks, userMap, maxTokens, opts) {
@@ -53,31 +55,25 @@ export function renderTxt(finalChunks, userMap, maxTokens, opts) {
 
   finalChunks.forEach((chunk) => {
     const { authorId: aid, timestamp: ts } = chunk;
-    const curDate = ts.toDateString();
+    const curDate = utcDayKey(ts);
     let timeStr;
     if (lastDate !== curDate) {
-      const dayFmt = ts.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-      });
-      out.push(`\n=== ${dayFmt} ===`);
-      timeStr = `[${formatAMPM(ts)}]`;
+      out.push(`\n=== ${formatDayDividerUtc(ts)} ===`);
+      timeStr = `[${formatAMPMUtc(ts)}]`;
       lastAid = null;
     } else if (lastTs) {
       const delta = ts - lastTs;
       if (delta > SESSION_BREAK_THRESHOLD) {
         out.push(`\n=== SESSION BREAK (${formatLongDuration(delta)}) ===`);
-        timeStr = `[${formatAMPM(ts)}]`;
+        timeStr = `[${formatAMPMUtc(ts)}]`;
         lastAid = null;
       } else if (delta > ABSOLUTE_TIME_THRESHOLD) {
-        timeStr = `[${formatAMPM(ts)}]`;
+        timeStr = `[${formatAMPMUtc(ts)}]`;
       } else {
         timeStr = formatTimeDelta(delta);
       }
     } else {
-      timeStr = `[${formatAMPM(ts)}]`;
+      timeStr = `[${formatAMPMUtc(ts)}]`;
     }
 
     let parts = chunk.contentParts;

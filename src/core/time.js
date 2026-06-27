@@ -58,10 +58,29 @@ export function formatLongDuration(diffMs) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function formatAMPM(date) {
-  let h = date.getHours();
-  const m = date.getMinutes();
+// Output timestamps are rendered in UTC so the result is deterministic and
+// viewer-independent (and consistent with the "# Start: …GMT" header).
+
+export function formatAMPMUtc(date) {
+  let h = date.getUTCHours();
+  const m = date.getUTCMinutes();
   const ap = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${m < 10 ? '0' + m : m} ${ap}`;
+}
+
+// Stable per-UTC-day key for detecting day changes (YYYY-MM-DD).
+export function utcDayKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+// Human day-divider label in UTC, e.g. "Saturday, Jul 12, 2025".
+export function formatDayDividerUtc(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
