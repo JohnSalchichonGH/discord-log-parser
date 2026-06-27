@@ -83,7 +83,7 @@ https://...   ← skipped, no useful content
 
 ## Usage
 
-1. Open `index.html` in any modern browser.
+1. Open the app: run `npm install && npm run dev` and visit the printed URL, or build a standalone file with `npm run build` and open `dist/index.html` directly (no server needed — it's fully self-contained).
 2. **Step 1 — Upload:** Drop or select one or more `.html` / `.txt` export files. Review the auto-detected channel groups and manually merge any groups that belong together.
 3. **Step 2 — Configure:** Set the token budget, filters, keyword priorities, redaction options, and a custom preamble.
 4. **Step 3 — Preview:** Review the live statistics dashboard, token budget breakdown, and a scrollable output preview. Tweak settings and re-process as needed.
@@ -211,7 +211,7 @@ All configuration — token limit, model preset, filter states, redaction toggle
 
 ## Privacy
 
-Everything runs locally in your browser. No data is sent anywhere. The tool has no network requests, no analytics, and no external dependencies beyond Google Fonts (for typography; the tool works fine without it).
+Everything runs locally in your browser. No data is sent anywhere. The built `dist/index.html` makes **zero network requests** — fonts are self-hosted and inlined, there is no analytics, and there are no runtime external dependencies.
 
 ---
 
@@ -222,3 +222,29 @@ Everything runs locally in your browser. No data is sent anywhere. The tool has 
 - Edited message content is not tracked — only the current version at export time is included.
 - The 1 token ≈ 4 characters approximation is a rough average. Actual token count will vary by model and tokeniser.
 - System message detection in `.txt` exports is heuristic-based and may not catch all system message variants across Discord locales.
+
+---
+
+## Development
+
+The app is developed as ES modules under `src/` and built into a single, dependency-free `dist/index.html` (all JS, CSS, and fonts inlined) so the "double-click to run, no server" experience is preserved.
+
+```
+npm install      # install dev/build deps (Vite, Vitest, fonts)
+npm run dev      # live dev server with HMR
+npm test         # run the Vitest suite
+npm run build    # produce the standalone dist/index.html
+```
+
+Layout:
+
+| Path | Contents |
+|---|---|
+| `src/core/` | grouping, processing pipeline, chunking, token estimation, time/format helpers |
+| `src/parsers/` | HTML and TXT export parsers |
+| `src/render/` | TXT / JSON / Markdown / CSV renderers |
+| `src/ui/` | markup styles + the DOM controller (`app.js`) |
+| `test/` | Vitest suites + synthetic DCE fixtures |
+| `reference/legacy-index.html` | the original single-file build, frozen as a behavior oracle |
+
+All parsing/processing/rendering logic lives in tested modules; `src/ui/app.js` is the thin DOM glue.

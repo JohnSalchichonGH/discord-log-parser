@@ -1,9 +1,10 @@
-// App entry point. For now this only wires a build-smoke marker that proves the
-// module graph is bundled and inlined correctly. The full wizard UI will be
-// migrated here from the legacy ../index.html across subsequent Phase 0 steps.
-import { formatBytes } from './core/format.js';
+// App entry point. Imports are bundled and inlined into a single dist/index.html
+// by vite-plugin-singlefile, so the built file makes ZERO network requests.
 
-const app = document.getElementById('app');
-if (app) {
-  app.dataset.smoke = `build-ok:${formatBytes(1536)}`;
-}
+// Self-hosted variable fonts (latin + latin-ext, weight axis). These replace the
+// legacy Google Fonts <link>, honoring the tool's "no network requests" promise.
+import '@fontsource-variable/dm-sans/wght.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+
+import './ui/styles.css';
+import './ui/app.js';
