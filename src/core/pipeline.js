@@ -8,6 +8,8 @@
 import { collectAuthors, extractMessages } from '../parsers/html.js';
 import { collectAuthorsTxt, extractMessagesTxt } from '../parsers/txt.js';
 import { collectAuthorsJson, extractMessagesJson } from '../parsers/json.js';
+import { messageCost, legendReserve, fitToBudget } from './budget.js';
+import { renderTxt } from '../render/txt.js';
 
 // Dispatch author-collection / message-extraction by file format.
 function collectAuthorsFor(f, userMap, counter) {
@@ -46,20 +48,44 @@ export function processGroup(sortedFiles, opts) {
     for (const name of userMap.keys()) userMap.set(name, name);
   }
 
-  // Phase 2: Extract + deduplicate
-  const seen = new Set();
+  // Phase 2: Extract + deduplicate.
+  // HTML/JSON messages have stable snowflake ids -> exact dedup. TXT messages
+  // have none, so we key on timestamp|author|full-content. To avoid collapsing
+  // legitimately-repeated short messages (e.g. "ok" twice in the same minute,
+  // B5), we allow each keyless message up to the maximum number of times it
+  // appears in any single file (true cross-file overlap is still deduped).
+  const perFileMsgs = sortedFiles.map((f) => extractMessagesFor(f, userMap));
+  const keylessKey = (m) =>
+    `ts:${m.timestamp.getTime()}|${m.authorName}|${m.contentParts.join('')}`;
+
+  const allowed = new Map(); // keyless key -> max per-file occurrence count
+  for (const msgs of perFileMsgs) {
+    const perFile = new Map();
+    for (const m of msgs) {
+      if (m.messageId) continue;
+      const k = keylessKey(m);
+      perFile.set(k, (perFile.get(k) || 0) + 1);
+    }
+    for (const [k, c] of perFile)
+      allowed.set(k, Math.max(allowed.get(k) || 0, c));
+  }
+
+  const seenIds = new Set();
+  const keptKeyless = new Map(); // keyless key -> running kept count
   const allMessages = [];
-  for (const f of sortedFiles) {
-    const msgs = extractMessagesFor(f, userMap);
-    for (const msg of msgs) {
-      const key = msg.messageId
-        ? `id:${msg.messageId}`
-        : `ts:${msg.timestamp.getTime()}|${msg.authorName}|${(
-            msg.contentParts[0] || ''
-          ).substring(0, 30)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        allMessages.push(msg);
+  for (const msgs of perFileMsgs) {
+    for (const m of msgs) {
+      if (m.messageId) {
+        const idk = `id:${m.messageId}`;
+        if (seenIds.has(idk)) continue;
+        seenIds.add(idk);
+        allMessages.push(m);
+      } else {
+        const k = keylessKey(m);
+        const used = keptKeyless.get(k) || 0;
+        if (used >= (allowed.get(k) || 1)) continue;
+        keptKeyless.set(k, used + 1);
+        allMessages.push(m);
       }
     }
   }
@@ -113,14 +139,15 @@ export function processGroup(sortedFiles, opts) {
     }
   }
 
-  // Budget: priority first, then newest normal
-  const headerBudget = 400 * 4;
-  let currentChars = headerBudget;
+  // Budget: priority first, then newest normal. The per-message cost and the
+  // legend reservation are conservative estimates (A7); a verify-and-retrim pass
+  // below trims against the real renderer so the output provably fits.
+  let currentChars = legendReserve(userMap.size);
   const kept = [];
 
   // Always keep all priority messages (budget permitting)
   for (const m of priorityMsgs) {
-    const cost = m.contentParts.join('\n').length + 15;
+    const cost = messageCost(m);
     if (currentChars + cost > maxChars) break;
     currentChars += cost;
     kept.push(m);
@@ -130,7 +157,7 @@ export function processGroup(sortedFiles, opts) {
   const reversedNormal = [...normalMsgs].reverse();
   const keptNormal = [];
   for (const m of reversedNormal) {
-    const cost = m.contentParts.join('\n').length + 15;
+    const cost = messageCost(m);
     if (currentChars + cost > maxChars) break;
     currentChars += cost;
     keptNormal.push(m);
@@ -138,6 +165,16 @@ export function processGroup(sortedFiles, opts) {
   keptNormal.reverse();
 
   let finalChunks = [...kept, ...keptNormal].sort((a, b) => a.timestamp - b.timestamp);
+
+  // A7 verify-and-retrim: measure the actual rendered TXT and drop oldest
+  // non-priority messages until it fits within the budget.
+  const prioritySet = new Set(priorityMsgs);
+  finalChunks = fitToBudget(
+    finalChunks,
+    maxChars,
+    prioritySet,
+    (msgs) => renderTxt(msgs, userMap, Math.round(maxChars / 4), {}).length,
+  );
 
   // Post-trim: low activity filter
   if (minMsgs > 0) {

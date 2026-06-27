@@ -68,6 +68,43 @@ describe('processGroup (TXT)', () => {
   });
 });
 
+describe('processGroup — TXT dedup (B5)', () => {
+  const txt = (body) => `Guild: G\nChannel: c\n\n${body}`;
+
+  it('keeps legitimately-repeated identical messages within one file', () => {
+    const content = txt(
+      ['[7/12/2025 3:50 AM] bob', 'ok', '', '[7/12/2025 3:50 AM] bob', 'ok', ''].join(
+        '\n',
+      ),
+    );
+    const { finalChunks } = processGroup([{ isTxt: true, content }], baseOpts());
+    expect(finalChunks.filter((m) => m.contentParts[0] === 'ok')).toHaveLength(2);
+  });
+
+  it('deduplicates the overlap between two export files', () => {
+    // Both files contain the same two messages; result should keep each once.
+    const a = txt(
+      ['[7/12/2025 3:50 AM] bob', 'hello', '', '[7/12/2025 3:51 AM] bob', 'world', ''].join(
+        '\n',
+      ),
+    );
+    const b = txt(
+      ['[7/12/2025 3:51 AM] bob', 'world', '', '[7/12/2025 3:52 AM] bob', 'new', ''].join(
+        '\n',
+      ),
+    );
+    const { finalChunks } = processGroup(
+      [
+        { isTxt: true, content: a, sortOrder: 1 },
+        { isTxt: true, content: b, sortOrder: 2 },
+      ],
+      baseOpts(),
+    );
+    const texts = finalChunks.map((m) => m.contentParts[0]);
+    expect(texts).toEqual(['hello', 'world', 'new']); // "world" not duplicated
+  });
+});
+
 describe('processGroup (JSON)', () => {
   it('extracts all messages with locale-independent timestamps', () => {
     const files = [{ isJson: true, content: sampleJson }];
@@ -151,10 +188,10 @@ describe('chunkMessages', () => {
       contentParts: ['x'.repeat(300)],
       timestamp: new Date(2025, 0, 1, 0, i),
     }));
-    // headerBudget=1600, each msg=315 chars. maxChars=3000 fits 4 msgs/chunk.
+    // headerBudget=200, messageCost≈317/msg. maxChars=3000 fits 8 msgs/chunk.
     const chunks = chunkMessages(msgs, 750, 2);
     expect(chunks.length).toBeGreaterThan(1);
-    expect(chunks[0]).toHaveLength(4);
+    expect(chunks[0]).toHaveLength(8);
     // overlap=2: the last 2 of a chunk are the first 2 of the next.
     expect(chunks[0].slice(-2)).toEqual(chunks[1].slice(0, 2));
   });
