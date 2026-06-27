@@ -60,12 +60,9 @@ describe('extractMessagesTxt', () => {
   });
 });
 
-// KNOWN BUG (A9), characterized so a later fix has a guard to flip.
-// DCE appends a postamble ("==== Exported N message(s) ====") after the last
-// message. Nothing terminates the final message, so those trailing lines get
-// slurped into its content. The main sample.txt fixture deliberately omits the
-// postamble; this test pins the current (buggy) behavior on a realistic input.
-describe('TXT postamble pollution (known bug A9)', () => {
+// A9 FIXED: the postamble separator now terminates the final message so the
+// "Exported N message(s)" footer is not slurped into its body.
+describe('TXT postamble handling (A9)', () => {
   const withPostamble = [
     '[7/12/2025 3:50 AM] alice',
     'last message',
@@ -76,13 +73,63 @@ describe('TXT postamble pollution (known bug A9)', () => {
     '',
   ].join('\n');
 
-  it('currently slurps the postamble into the final message body', () => {
+  it('does not slurp the postamble into the final message body', () => {
     const userMap = new Map();
     collectAuthorsTxt(withPostamble, userMap, { value: 1 });
     const msgs = extractMessagesTxt(withPostamble, userMap);
     expect(msgs).toHaveLength(1);
-    // The body is polluted with the separator/footer lines (the bug).
-    expect(msgs[0].contentParts[0]).toContain('Exported 1 message(s)');
+    expect(msgs[0].contentParts).toEqual(['last message']);
+  });
+});
+
+describe('TXT stickers / forwarded / blockquote handling', () => {
+  function parse(text) {
+    const userMap = new Map();
+    collectAuthorsTxt(text, userMap, { value: 1 });
+    return extractMessagesTxt(text, userMap);
+  }
+
+  it('emits a [STICKER] token per {Stickers} url (A5)', () => {
+    const msgs = parse(
+      [
+        '[7/12/2025 3:50 AM] alice',
+        'nice',
+        '',
+        '{Stickers}',
+        'https://cdn.discordapp.com/stickers/1.png',
+        '',
+      ].join('\n'),
+    );
+    expect(msgs[0].contentParts).toEqual(['nice', '[STICKER]']);
+  });
+
+  it('keeps forwarded content but drops the metadata line (A5)', () => {
+    const msgs = parse(
+      [
+        '[7/12/2025 3:50 AM] alice',
+        '',
+        '{Forwarded Message}',
+        'forwarded body text',
+        'Originally sent: 7/11/2025 1:00 PM',
+        '',
+      ].join('\n'),
+    );
+    const joined = msgs[0].contentParts.join('\n');
+    expect(joined).toContain('forwarded body text');
+    expect(joined).not.toContain('Originally sent');
+    expect(joined).not.toContain('{Forwarded Message}');
+  });
+
+  it('keeps a markdown blockquote as body text, not a reply (A4)', () => {
+    const msgs = parse(
+      ['[7/12/2025 3:50 AM] alice', '> someone said: hello there', 'my reply'].join(
+        '\n',
+      ),
+    );
+    // The "> someone said: …" line is preserved verbatim, not turned into a
+    // "> Uxx: …" reply attribution.
+    expect(msgs[0].contentParts[0]).toContain('> someone said: hello there');
+    expect(msgs[0].contentParts[0]).toContain('my reply');
   });
 });
 

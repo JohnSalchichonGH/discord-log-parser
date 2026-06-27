@@ -78,7 +78,11 @@ export function extractMessages(htmlString, userMap) {
           let rSnippet = '…';
           if (rConDiv) {
             const raw = rConDiv.textContent.trim().replace(/\n/g, ' ');
-            if (raw && !raw.includes('Click to see original'))
+            // A6: both placeholder strings DCE emits for content-less replies.
+            const isPlaceholder =
+              raw.includes('Click to see original') ||
+              raw.includes('Click to see attachment');
+            if (raw && !isPlaceholder)
               rSnippet = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
           }
           contentParts.push(`> ${rId}: ${rSnippet}`);

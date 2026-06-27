@@ -59,6 +59,34 @@ describe('extractMessages', () => {
   });
 });
 
+describe('extractMessages — reply placeholders (A6)', () => {
+  it('does not leak "Click to see attachment" into the reply snippet', () => {
+    const html = `
+      <div class="chatlog__message-group">
+        <div class="chatlog__message-container" data-message-id="1393439727943680000">
+          <div class="chatlog__message-primary">
+            <div class="chatlog__reply">
+              <div class="chatlog__reply-author">alice</div>
+              <div class="chatlog__reply-content">
+                <span class="chatlog__reply-link"><em>Click to see attachment</em><span>🖼️</span></span>
+              </div>
+            </div>
+            <div class="chatlog__header">
+              <span class="chatlog__author">bob</span>
+            </div>
+            <div class="chatlog__markdown-preserve">replying</div>
+          </div>
+        </div>
+      </div>`;
+    const userMap = new Map();
+    collectAuthors(html, userMap, { value: 1 });
+    const msgs = extractMessages(html, userMap);
+    // bob (group author) -> U1; alice (reply author) -> U2.
+    expect(msgs[0].contentParts[0]).toBe('> U2: …');
+    expect(msgs[0].contentParts[0]).not.toContain('Click to see');
+  });
+});
+
 describe('extractMessages — timestamp fallback', () => {
   it('falls back to the title when no snowflake id is present', () => {
     const html = `

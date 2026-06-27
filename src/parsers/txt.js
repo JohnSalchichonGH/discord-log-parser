@@ -69,31 +69,19 @@ export function extractMessagesTxt(content, userMap) {
     curTimestamp = null;
   let textLines = [],
     reactions = [],
-    attachments = [];
+    attachments = [],
+    stickers = [];
   let mode = 'text';
 
   function flushMessage() {
     if (!curAuthorName || !curTimestamp) return;
     const authorId = userMap.get(curAuthorName) || curAuthorName;
     const contentParts = [];
+    // DCE plain-text exports carry no reply metadata, so message text — including
+    // any markdown blockquotes ("> quoted") — is kept verbatim as body content.
+    // (A4: the old `> Author: text` reply parsing mis-attributed real blockquotes.)
     const text = textLines.join('\n').trim();
-    if (text) {
-      const textLinesSplit = text.split('\n');
-      let replyStr = null,
-        bodyLines = [];
-      for (const tl of textLinesSplit) {
-        const rq = tl.match(/^>\s*(.+?):\s*(.*)$/);
-        if (rq && !replyStr) {
-          const rName = rq[1].trim();
-          const rId = userMap.has(rName) ? userMap.get(rName) : rName;
-          const snip = rq[2].trim();
-          replyStr = `> ${rId}: ${snip.length > 80 ? snip.substring(0, 80) + '…' : snip}`;
-        } else bodyLines.push(tl);
-      }
-      if (replyStr) contentParts.push(replyStr);
-      const body = bodyLines.join('\n').trim();
-      if (body) contentParts.push(body);
-    }
+    if (text) contentParts.push(text);
     for (const url of attachments) {
       try {
         const urlObj = new URL(url);
@@ -109,6 +97,8 @@ export function extractMessagesTxt(content, userMap) {
         contentParts.push('[MEDIA: unknown]');
       }
     }
+    // Stickers (A5): one [STICKER] token per sticker URL in the {Stickers} block.
+    for (let i = 0; i < stickers.length; i++) contentParts.push('[STICKER]');
     if (reactions.length > 0) {
       const formatted = `^{${reactions.join(', ')}}`;
       if (
@@ -130,6 +120,7 @@ export function extractMessagesTxt(content, userMap) {
     textLines = [];
     reactions = [];
     attachments = [];
+    stickers = [];
     mode = 'text';
   }
 
@@ -145,6 +136,14 @@ export function extractMessagesTxt(content, userMap) {
     }
     if (!curAuthorName) continue;
     const trimmed = line.trim();
+    // Postamble / separator line ("=====…"): end the current message so the
+    // footer ("Exported N message(s)") is not slurped into it (A9).
+    if (/^={40,}$/.test(trimmed)) {
+      flushMessage();
+      curAuthorName = null;
+      curTimestamp = null;
+      continue;
+    }
     if (trimmed === '{Embed}') {
       mode = 'embed';
       continue;
@@ -153,11 +152,17 @@ export function extractMessagesTxt(content, userMap) {
       mode = 'attachments';
       continue;
     }
+    if (trimmed === '{Stickers}') {
+      mode = 'stickers';
+      continue;
+    }
     if (trimmed === '{Reactions}') {
       mode = 'reactions';
       continue;
     }
-    if (trimmed === '{Reply}') {
+    if (trimmed === '{Reply}' || trimmed === '{Forwarded Message}') {
+      // Neither carries a payload we render specially; any content that follows
+      // is captured as normal body text (A5: forwarded content is preserved).
       mode = 'text';
       continue;
     }
@@ -172,6 +177,13 @@ export function extractMessagesTxt(content, userMap) {
         }
         if (trimmed.startsWith('http')) attachments.push(trimmed);
         break;
+      case 'stickers':
+        if (trimmed === '') {
+          mode = 'text';
+          break;
+        }
+        if (trimmed.startsWith('http')) stickers.push(trimmed);
+        break;
       case 'reactions':
         if (trimmed === '') {
           mode = 'text';
@@ -180,6 +192,8 @@ export function extractMessagesTxt(content, userMap) {
         if (trimmed) reactions.push(trimmed);
         break;
       default:
+        // Skip the forwarded-message metadata line (A5).
+        if (/^Originally sent:/.test(trimmed)) break;
         textLines.push(line);
         break;
     }
