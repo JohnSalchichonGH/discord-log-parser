@@ -136,6 +136,8 @@ function goToStep(n) {
     s.classList.remove('active', 'completed');
     if (sn === n) s.classList.add('active');
     else if (sn < n) s.classList.add('completed');
+    if (sn === n) s.setAttribute('aria-current', 'step');
+    else s.removeAttribute('aria-current');
   });
 
   currentStep = n;
@@ -358,7 +360,7 @@ function renderDropZoneEmpty() {
     </svg>
     <div class="drop-label">Drop files here or click to browse</div>
     <div class="drop-hint">.json, .html, or .txt files from DiscordChatExporter</div>
-    <input type="file" id="fileInput" accept=".html,.txt,.json" multiple>
+    <input type="file" id="fileInput" accept=".html,.txt,.json" multiple aria-label="Upload .json, .html, or .txt Discord export files">
   `;
   const newInput = dropZone.querySelector('input');
   newInput.addEventListener('change', (e) => {
@@ -382,7 +384,7 @@ function onAllFilesLoaded() {
       <svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       <span class="file-name">${escHtml(f.name)}</span>
       ${errNote}
-      <button class="file-remove" data-idx="${i}" title="Remove">✕</button>
+      <button class="file-remove" type="button" data-idx="${i}" title="Remove" aria-label="Remove ${escHtml(f.name)}">✕</button>
     `;
     listEl.appendChild(item);
   });

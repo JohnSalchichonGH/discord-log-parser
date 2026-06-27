@@ -9,7 +9,13 @@
     <!-- ═══════════════════════════════════════════════════════════════════
      THEME TOGGLE
      ═══════════════════════════════════════════════════════════════════ -->
-    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+    <button
+      class="theme-toggle"
+      id="themeToggle"
+      type="button"
+      title="Toggle theme"
+      aria-label="Toggle light or dark theme"
+    >
       <svg
         id="themeIcon"
         width="18"
@@ -66,7 +72,7 @@
       </header>
 
       <!-- WIZARD STEPS -->
-      <nav class="wizard-steps" id="wizardNav">
+      <nav class="wizard-steps" id="wizardNav" aria-label="Progress">
         <div class="wizard-step active" data-step="1">
           <span class="step-num">1</span>
           <span class="step-label">Upload</span>
@@ -135,6 +141,7 @@
               id="fileInput"
               accept=".html,.txt,.json"
               multiple
+              aria-label="Upload .json, .html, or .txt Discord export files"
             />
           </div>
 
@@ -638,7 +645,12 @@
           </div>
         </div>
 
-        <div class="status-bar" id="processStatus"></div>
+        <div
+          class="status-bar"
+          id="processStatus"
+          role="status"
+          aria-live="polite"
+        ></div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════
@@ -740,7 +752,12 @@
           </button>
         </div>
 
-        <div class="status-bar" id="downloadStatus"></div>
+        <div
+          class="status-bar"
+          id="downloadStatus"
+          role="status"
+          aria-live="polite"
+        ></div>
       </section>
     </div>
     <script type="module" src="/main.js"></script>
