@@ -128,6 +128,11 @@ function saveSettings() {
       chunkOutput: $('chunkOutput').checked,
       chunkOverlap: $('chunkOverlap').value,
       useAccurateTokens: $('useAccurateTokens').checked,
+      // E3: persist content fields so they survive a reload.
+      keywords: $('keywordInput').value,
+      preamble: $('customPreamble').value,
+      dateFrom: $('dateFrom').value,
+      dateTo: $('dateTo').value,
     };
     localStorage.setItem('dlp-settings', JSON.stringify(s));
   } catch (e) {}
@@ -153,7 +158,12 @@ function loadSettings() {
     if (s.chunkOverlap) $('chunkOverlap').value = s.chunkOverlap;
     if (s.useAccurateTokens)
       $('useAccurateTokens').checked = s.useAccurateTokens;
+    if (s.keywords) $('keywordInput').value = s.keywords;
+    if (s.preamble) $('customPreamble').value = s.preamble;
+    if (s.dateFrom) $('dateFrom').value = s.dateFrom;
+    if (s.dateTo) $('dateTo').value = s.dateTo;
     updateTokenLabel();
+    syncNameToggles(); // reflect any persisted real-names/anonymize state
     $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
     $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
   } catch (e) {}
@@ -225,6 +235,19 @@ $('filterLowActivity').addEventListener('change', function () {
 $('chunkOutput').addEventListener('change', function () {
   $('chunkOptions').style.display = this.checked ? 'block' : 'none';
 });
+
+// E4: "Use real names" and "Anonymize header" are opposites — enabling one
+// would otherwise defeat the other. Keep them mutually exclusive.
+function syncNameToggles(changed) {
+  const real = $('useRealNames'),
+    redact = $('redactNames');
+  if (changed === 'real' && real.checked) redact.checked = false;
+  if (changed === 'redact' && redact.checked) real.checked = false;
+  redact.closest('.toggle-row').classList.toggle('is-disabled', real.checked);
+  real.closest('.toggle-row').classList.toggle('is-disabled', redact.checked);
+}
+$('useRealNames').addEventListener('change', () => syncNameToggles('real'));
+$('redactNames').addEventListener('change', () => syncNameToggles('redact'));
 
 // Accurate tokenizer toggle — present only in the accurate build.
 if (hasAccurate()) {
@@ -685,31 +708,14 @@ function runProcessing() {
       );
 
       if (processedOutputs.length > 0) {
-        const po = processedOutputs[0];
-        const renderOpts = {
-          preamble: $('customPreamble').value,
-          redactNames: $('redactNames').checked,
-          redactUrls: $('redactUrls').checked,
-          redactEmails: $('redactEmails').checked,
-        };
-        const previewText = renderTxt(
-          po.finalChunks,
-          po.userMap,
-          maxTokens,
-          renderOpts,
-        );
-        const lines = previewText.split('\n');
-        const maxPreviewLines = 300;
-        $('previewContent').textContent =
-          lines.length > maxPreviewLines
-            ? lines.slice(0, maxPreviewLines).join('\n') +
-              `\n\n… (${lines.length - maxPreviewLines} more lines)`
-            : previewText;
-        const chars = previewText.length;
-        const estTokens = countTokens(previewText);
-        const tokenLabel = useAccurate ? '' : '~';
-        $('previewInfo').textContent =
-          `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
+        // B6: let the user preview/copy any channel group, not just the first.
+        const sel = $('previewGroup');
+        sel.innerHTML = processedOutputs
+          .map((po, i) => `<option value="${i}">${escHtml(po.name)}</option>`)
+          .join('');
+        sel.style.display = processedOutputs.length > 1 ? '' : 'none';
+        sel.value = '0';
+        renderPreview(0);
         $('previewCard').style.display = 'block';
       }
 
@@ -785,6 +791,41 @@ async function computeOutputs(validFiles, opts, useAccurate) {
   }
   return { outputs, totalMessages, totalFiltered, totalKept, engine: 'inline' };
 }
+
+// Render the live preview for one processed channel group (B6).
+function renderPreview(idx) {
+  const po = processedOutputs[idx];
+  if (!po) return;
+  const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
+  const renderOpts = {
+    preamble: $('customPreamble').value,
+    redactNames: $('redactNames').checked,
+    redactUrls: $('redactUrls').checked,
+    redactEmails: $('redactEmails').checked,
+  };
+  const previewText = renderTxt(
+    po.finalChunks,
+    po.userMap,
+    maxTokens,
+    renderOpts,
+  );
+  const lines = previewText.split('\n');
+  const maxPreviewLines = 300;
+  $('previewContent').textContent =
+    lines.length > maxPreviewLines
+      ? lines.slice(0, maxPreviewLines).join('\n') +
+        `\n\n… (${lines.length - maxPreviewLines} more lines)`
+      : previewText;
+  const chars = previewText.length;
+  const estTokens = countTokens(previewText);
+  const tokenLabel =
+    $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
+  $('previewInfo').textContent =
+    `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
+}
+$('previewGroup').addEventListener('change', function () {
+  renderPreview(parseInt(this.value) || 0);
+});
 
 function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
   const dateRange =
@@ -875,7 +916,8 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
 /* COPY PREVIEW */
 $('copyPreview').addEventListener('click', () => {
   if (processedOutputs.length === 0) return;
-  const po = processedOutputs[0];
+  const idx = parseInt($('previewGroup').value) || 0;
+  const po = processedOutputs[idx] || processedOutputs[0];
   const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
   const renderOpts = {
     preamble: $('customPreamble').value,

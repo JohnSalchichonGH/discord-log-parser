@@ -600,13 +600,25 @@
           <div class="preview-container">
             <div class="preview-toolbar">
               <span class="preview-info" id="previewInfo"></span>
-              <button
-                class="btn btn-secondary"
-                style="padding: 5px 12px; font-size: 12px"
-                id="copyPreview"
-              >
-                Copy all
-              </button>
+              <div style="display: flex; gap: 8px; align-items: center">
+                <select
+                  id="previewGroup"
+                  style="
+                    display: none;
+                    padding: 4px 8px;
+                    font-size: 12px;
+                    width: auto;
+                  "
+                  aria-label="Channel to preview"
+                ></select>
+                <button
+                  class="btn btn-secondary"
+                  style="padding: 5px 12px; font-size: 12px"
+                  id="copyPreview"
+                >
+                  Copy all
+                </button>
+              </div>
             </div>
             <div class="preview-scroll" id="previewScroll">
               <pre id="previewContent"></pre>

@@ -779,3 +779,9 @@ textarea:focus-visible,
   white-space: nowrap;
   border: 0;
 }
+
+/* Mutually-exclusive toggle (e.g. real names vs anonymize) shown inactive. */
+.toggle-row.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
