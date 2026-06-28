@@ -13,6 +13,7 @@ import {
   processGroup,
   getRawMessages,
   getFilteredMessages,
+  buildIdentity,
 } from './core/pipeline.js';
 import { computeAnalytics } from './core/analytics.js';
 import { countTokens, disableAccurate } from './core/token-config.js';
@@ -64,13 +65,16 @@ self.onmessage = (e) => {
 
       const groups = buildGroups(files);
       const opts = { ...msg.opts, countTokens };
+      // One global identity across ALL files, so a person active in several
+      // channels is a single identity with one consistent name everywhere.
+      const identity = buildIdentity(files, opts.useRealNames);
       const outputs = [];
       let totalMessages = 0,
         totalFiltered = 0,
         totalKept = 0,
         done = 0;
       for (const [, arr] of groups) {
-        const r = processGroup(arr, opts);
+        const r = processGroup(arr, opts, identity);
         totalMessages += r.allMessagesCount;
         totalFiltered += r.filteredCount;
         totalKept += r.finalChunks.length;

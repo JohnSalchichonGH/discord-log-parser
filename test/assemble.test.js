@@ -26,16 +26,46 @@ describe('buildUserMap stable identity (#4)', () => {
     expect(userMap.size).toBe(2);
   });
 
-  it('treats one user who changed nickname as a single id', () => {
+  it('treats one user who changed nickname as a single id, labeled by the most recent nickname', () => {
     const msgs = [
-      raw({ authorKey: '111', authorName: 'old' }),
-      raw({ authorKey: '111', authorName: 'new' }),
+      raw({
+        authorKey: '111',
+        authorName: 'old',
+        timestamp: new Date('2025-01-01T00:00:00Z'),
+      }),
+      raw({
+        authorKey: '111',
+        authorName: 'new',
+        timestamp: new Date('2025-02-01T00:00:00Z'),
+      }),
     ];
     const { userMap, uidOf } = buildUserMap([msgs], false);
     expect(uidOf('111', 'old')).toBe('U1');
     expect(uidOf('111', 'new')).toBe('U1'); // same person
     expect(userMap.size).toBe(1);
-    expect(userMap.get('U1')).toBe('old'); // first-seen label
+    expect(userMap.get('U1')).toBe('new'); // most-recent nickname wins
+  });
+
+  it('prefers an id-backed nickname over an id-less (TXT) name for the label', () => {
+    // Same person: an id-backed HTML/JSON nickname "k" plus a later TXT line
+    // written by username "kang0420". The id-backed nickname should win.
+    const msgs = [
+      raw({
+        authorKey: '901',
+        authorName: 'k',
+        authorUsername: 'kang0420',
+        timestamp: new Date('2025-01-01T00:00:00Z'),
+      }),
+      raw({
+        authorKey: null,
+        authorName: 'kang0420',
+        timestamp: new Date('2025-03-01T00:00:00Z'),
+      }),
+    ];
+    const { userMap, uidOf } = buildUserMap([msgs], false);
+    expect(uidOf(null, 'kang0420')).toBe('U1'); // TXT name resolves to same person
+    expect(userMap.size).toBe(1);
+    expect(userMap.get('U1')).toBe('k'); // id-backed nickname preferred
   });
 
   it('falls back to display name when no id is available (TXT)', () => {

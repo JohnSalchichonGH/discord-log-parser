@@ -65,6 +65,30 @@ export function buildUserMap(perFileRaw, useRealNames) {
     for (const m of msgs)
       if (m.replyToName || m.replyToKey) register(m.replyToKey, m.replyToName);
 
+  // Pass 3: label each identity with its MOST RECENT nickname. An id-backed
+  // message (HTML/JSON) carries a real nickname and a reliable timestamp, so
+  // those win over id-less TXT names; among the same kind, the latest message
+  // wins. This keeps display names current (e.g. after a rename) and consistent
+  // regardless of file order.
+  const labelPick = new Map(); // uid -> { ts, fromId }
+  for (const msgs of perFileRaw)
+    for (const m of msgs) {
+      const uid = resolve(m.authorKey, m.authorName);
+      const nm = (m.authorName || '').trim();
+      if (!uid || !nm) continue;
+      const ts = m.timestamp ? m.timestamp.getTime() : 0;
+      const fromId = !!m.authorKey;
+      const cur = labelPick.get(uid);
+      if (
+        !cur ||
+        (fromId && !cur.fromId) ||
+        (fromId === cur.fromId && ts >= cur.ts)
+      ) {
+        labelPick.set(uid, { ts, fromId });
+        label.set(uid, nm);
+      }
+    }
+
   const uidOf = (key, name) => resolve(key, name) || name || '';
   return { userMap: label, uidOf };
 }

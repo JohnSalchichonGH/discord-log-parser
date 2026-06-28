@@ -9,6 +9,7 @@ import {
   processGroup,
   getRawMessages,
   getFilteredMessages,
+  buildIdentity,
 } from '../core/pipeline.js';
 import { computeAnalytics } from '../core/analytics.js';
 import {
@@ -807,12 +808,14 @@ async function computeOutputs(validFiles, opts, useAccurate) {
 
   const groups = buildGroups(validFiles);
   const fullOpts = { ...opts, countTokens };
+  // One global identity across all files (matches the worker path).
+  const identity = buildIdentity(validFiles, fullOpts.useRealNames);
   const outputs = [];
   let totalMessages = 0,
     totalFiltered = 0,
     totalKept = 0;
   for (const [, arr] of groups) {
-    const r = processGroup(arr, fullOpts);
+    const r = processGroup(arr, fullOpts, identity);
     totalMessages += r.allMessagesCount;
     totalFiltered += r.filteredCount;
     totalKept += r.finalChunks.length;
@@ -1083,7 +1086,8 @@ $('insightUserNone').addEventListener('click', (e) => {
   refreshView();
 });
 
-function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
+function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
+  const nameOf = (uid) => (userMap && userMap.get(uid)) || uid;
   const dateRange =
     chunks.length > 0
       ? `${chunks[0].timestamp.toLocaleDateString('en-US', {
@@ -1134,7 +1138,7 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
     const pct = Math.max(2, (count / maxCount) * 100);
     const color = BAR_COLORS[i % BAR_COLORS.length];
     chartHtml += `<div class="chart-bar-row">
-      <span class="chart-bar-label">${escHtml(uid)}</span>
+      <span class="chart-bar-label">${escHtml(nameOf(uid))}</span>
       <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${count}</div></div>
     </div>`;
   });
@@ -1157,7 +1161,7 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
     const color = BAR_COLORS[i % BAR_COLORS.length];
     const tokens = Math.round(b.chars / 4);
     budgetHtml += `<div class="chart-bar-row">
-      <span class="chart-bar-label">${escHtml(b.uid)}</span>
+      <span class="chart-bar-label">${escHtml(nameOf(b.uid))}</span>
       <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${tokens.toLocaleString()} tkn</div></div>
     </div>`;
   });

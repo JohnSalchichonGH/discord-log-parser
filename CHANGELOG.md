@@ -19,6 +19,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   message renders under one canonical identity name. Prefer JSON > HTML > TXT;
   TXT remains best-effort since its clock is minute-resolution in an unknown
   timezone.
+- **Global identity & most-recent nicknames.** Identity is now resolved once
+  across ALL files and shared by every channel group, so a person active in
+  several channels is a single identity everywhere — the Statistics card, the
+  Insights leaderboard/reply network, and the export legend no longer disagree
+  (previously each channel group resolved identity on its own). Each identity is
+  labeled with its **most recent** nickname (preferring id-backed HTML/JSON
+  nicknames over id-less TXT names), instead of the first name seen — so renamed
+  users show their current name consistently, regardless of file order. The
+  Statistics participant/budget bars now show this name rather than the raw id.
 
 ### Added
 

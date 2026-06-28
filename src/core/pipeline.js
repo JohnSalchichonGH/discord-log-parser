@@ -25,11 +25,20 @@ export function getRawMessages(f) {
   return f._raw;
 }
 
+// Build the shared identity (userMap + uidOf) across a set of files. Pass the
+// result into getFilteredMessages/processGroup so every channel group resolves
+// people against ONE global identity space — a person active in several channels
+// is one identity, with one consistent (most-recent) name everywhere.
+export function buildIdentity(files, useRealNames) {
+  return buildUserMap(files.map(getRawMessages), useRealNames);
+}
+
 // Parse + dedup + apply the pre-filters (date/bots/system/media/whitelist),
 // returning the full filtered conversation (NOT token-trimmed). Shared by the
 // export pipeline (processGroup) and the Insights analytics so both see the
-// same set of messages.
-export function getFilteredMessages(sortedFiles, opts) {
+// same set of messages. When `identity` is supplied it is used instead of
+// building a per-call (per-group) one, unifying identity across channels.
+export function getFilteredMessages(sortedFiles, opts, identity) {
   const {
     userFilter,
     filterBots: doBotFilter,
@@ -43,7 +52,7 @@ export function getFilteredMessages(sortedFiles, opts) {
 
   // Phase 1: parse once (cached), build the shared userMap, assemble messages.
   const perFileRaw = sortedFiles.map(getRawMessages);
-  const { userMap, uidOf } = buildUserMap(perFileRaw, useRealNames);
+  const { userMap, uidOf } = identity || buildUserMap(perFileRaw, useRealNames);
   const perFileMsgs = perFileRaw.map((rawList) =>
     rawList.map((r) => assembleMessage(r, uidOf)),
   );
@@ -155,11 +164,12 @@ export function getFilteredMessages(sortedFiles, opts) {
   return { filtered, userMap, allMessagesCount: allMessages.length };
 }
 
-export function processGroup(sortedFiles, opts) {
+export function processGroup(sortedFiles, opts, identity) {
   const { minMsgs, maxChars, keywords, countTokens, maxTokens } = opts;
   const { filtered, userMap, allMessagesCount } = getFilteredMessages(
     sortedFiles,
     opts,
+    identity,
   );
 
   // Phase 3: Token-limit trim with keyword priority
