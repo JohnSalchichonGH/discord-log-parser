@@ -1,5 +1,50 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+build/
+out/
+
+# Test / coverage output
 coverage/
+.nyc_output/
+
+# Vite / tooling caches
+.vite/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / local config
+.env
+.env.*
+!.env.example
+!.env.sample
 *.local
+
+# Local AI/editor/project-private files
+.claude/
+
+# OS junk
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
