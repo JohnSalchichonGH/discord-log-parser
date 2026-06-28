@@ -45,6 +45,9 @@ export function parseMessages(htmlString) {
       selectOne('.chatlog__author', group) ||
       selectOne('.chatlog__system-notification-author', group);
     const authorName = authorTag ? text(authorTag) : 'Unknown';
+    // Stable identity (#4): the author span carries data-user-id. Reply-author
+    // markup has no id, so replies fall back to matching by display name.
+    const authorKey = attr(authorTag, 'data-user-id') || null;
 
     for (const container of selectAll('.chatlog__message-container', group)) {
       // A3: prefer the clean snowflake in data-message-id; fall back to the
@@ -153,9 +156,11 @@ export function parseMessages(htmlString) {
       if (parts.length > 0 || replyToName != null || reactions)
         messages.push({
           messageId,
+          authorKey,
           authorName,
           timestamp,
           isSystem,
+          replyToKey: null, // reply markup has no user id
           replyToName,
           replySnippet,
           parts,

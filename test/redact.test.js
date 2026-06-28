@@ -21,7 +21,7 @@ describe('redactString', () => {
 });
 
 // One chunk carrying all three PII kinds in its content.
-const userMap = new Map([['alice', 'U1']]);
+const userMap = new Map([['U1', 'alice']]); // uid -> displayName (#4)
 const chunks = [
   {
     authorId: 'U1',
@@ -52,7 +52,7 @@ describe('redaction matrix — every format redacts content (D2)', () => {
 
 describe('structured formats keep ids and timestamps intact', () => {
   it('json: snowflake author and ISO timestamp survive phone redaction', () => {
-    const map = new Map([['alice', '1393439224627200000']]);
+    const map = new Map([['1393439224627200000', 'alice']]); // uid -> name
     const c = [
       {
         authorId: '1393439224627200000',

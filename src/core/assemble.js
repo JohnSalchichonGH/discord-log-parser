@@ -1,39 +1,63 @@
 // Bridges parse-once "raw messages" to the final message shape used by the
 // pipeline and renderers.
 //
-// Parsers emit raw messages that are independent of any author-id mapping:
-//   { messageId, authorName, timestamp, isSystem,
-//     replyToName, replySnippet, parts: string[], reactions: string|null }
-// The userMap (name -> U1/U2/…) is then built once across all files, and each
-// raw message is assembled into { …, authorId, contentParts } cheaply — no
-// re-parsing of file content on settings changes.
+// Parsers emit raw messages independent of any author-id mapping:
+//   { messageId, authorKey, authorName, timestamp, isSystem,
+//     replyToKey, replyToName, replySnippet, parts: string[], reactions }
+// `authorKey` is a STABLE Discord user id when the format provides one (HTML
+// data-user-id, JSON author.id); it is null for TXT. Identity is keyed by that
+// id when present (so a user who changes nickname stays one person, and two
+// different users who share a nickname stay separate), falling back to the
+// display name only when no id is available.
 
-// Build the shared name -> short-id map in first-seen order across all files.
-// Message authors and reply authors are both registered (matches the legacy
-// HTML behavior and is consistent for TXT/JSON).
+// Build the identity model once across all files and return:
+//   userMap: Map<uid, displayName>   (uid like "U1"; display name is the label)
+//   uidOf(key, name): resolves an author's short id from their key + name
 export function buildUserMap(perFileRaw, useRealNames) {
-  const userMap = new Map();
+  const idToUid = new Map(); // identity string -> uid
+  const nameToUid = new Map(); // display name -> uid (fallback for keyless lookups)
+  const label = new Map(); // uid -> display name
   let n = 1;
-  const add = (name) => {
-    if (name && !userMap.has(name)) userMap.set(name, `U${n++}`);
+
+  // A keyed author resolves ONLY by its id (so two different users who share a
+  // display name stay separate). A keyless lookup — e.g. an HTML reply, which
+  // has no id in the markup — resolves by display name against known authors.
+  const resolve = (key, name) =>
+    key
+      ? idToUid.get(`id:${key}`) || null
+      : (name && nameToUid.get(name)) || null;
+
+  const register = (key, name) => {
+    const nm = name || '';
+    if (!key && !nm) return;
+    if (resolve(key, nm)) return; // already known
+    const uid = useRealNames ? nm : `U${n++}`;
+    idToUid.set(key ? `id:${key}` : `name:${nm}`, uid);
+    if (!label.has(uid)) label.set(uid, nm);
+    if (nm && !nameToUid.has(nm)) nameToUid.set(nm, uid);
   };
-  for (const msgs of perFileRaw) {
-    for (const m of msgs) {
-      add(m.authorName);
-      if (m.replyToName) add(m.replyToName);
-    }
-  }
-  if (useRealNames) for (const k of userMap.keys()) userMap.set(k, k);
-  return userMap;
+
+  // Pass 1: message authors (so reply authors can match an existing user by
+  // name even when the reply markup carries no id — e.g. HTML replies).
+  for (const msgs of perFileRaw)
+    for (const m of msgs) register(m.authorKey, m.authorName);
+  // Pass 2: reply authors only create a new id when genuinely unseen.
+  for (const msgs of perFileRaw)
+    for (const m of msgs)
+      if (m.replyToName || m.replyToKey) register(m.replyToKey, m.replyToName);
+
+  const uidOf = (key, name) => resolve(key, name) || name || '';
+  return { userMap: label, uidOf };
 }
 
-// Assemble a raw message's final contentParts, mapping names to short ids and
-// merging the reaction onto the previous part unless that part is a media token.
-export function assembleMessage(raw, userMap) {
-  const uidOf = (name) => userMap.get(name) || name;
+// Assemble a raw message's final contentParts, mapping author identity to a short
+// id and merging the reaction onto the previous part unless it is a media token.
+export function assembleMessage(raw, uidOf) {
   const contentParts = [];
   if (raw.replyToName != null)
-    contentParts.push(`> ${uidOf(raw.replyToName)}: ${raw.replySnippet}`);
+    contentParts.push(
+      `> ${uidOf(raw.replyToKey, raw.replyToName)}: ${raw.replySnippet}`,
+    );
   for (const p of raw.parts) contentParts.push(p);
   if (raw.reactions) {
     if (
@@ -46,7 +70,7 @@ export function assembleMessage(raw, userMap) {
   return {
     messageId: raw.messageId,
     authorName: raw.authorName,
-    authorId: uidOf(raw.authorName),
+    authorId: uidOf(raw.authorKey, raw.authorName),
     timestamp: raw.timestamp,
     contentParts,
     isSystem: raw.isSystem,

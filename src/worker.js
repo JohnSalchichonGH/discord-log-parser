@@ -19,6 +19,11 @@ const cache = new Map();
 
 self.onmessage = (e) => {
   const msg = e.data;
+  // Echo the request id on every reply so the main thread can match responses
+  // to the correct in-flight request (prevents cross-talk between setFiles and
+  // process when both are pending).
+  const _id = msg._id;
+  const post = (obj) => self.postMessage({ ...obj, _id });
   try {
     if (msg.type === 'setFiles') {
       // Drop files no longer present; parse (and cache) any new ones.
@@ -36,7 +41,7 @@ self.onmessage = (e) => {
         for (const m of entry._raw)
           authors.set(m.authorName, (authors.get(m.authorName) || 0) + 1);
       }
-      self.postMessage({ type: 'authors', authors: [...authors.entries()] });
+      post({ type: 'authors', authors: [...authors.entries()] });
     } else if (msg.type === 'process') {
       // Reconstruct file objects from cache + the meta the main thread sends.
       const files = [];
@@ -70,11 +75,12 @@ self.onmessage = (e) => {
           userMap: r.userMap,
           totalRaw: r.allMessagesCount,
           filteredCount: r.filteredCount,
+          budgetExceeded: r.budgetExceeded,
         });
         done++;
-        self.postMessage({ type: 'progress', done, total: groups.size });
+        post({ type: 'progress', done, total: groups.size });
       }
-      self.postMessage({
+      post({
         type: 'done',
         outputs,
         totalMessages,
@@ -83,9 +89,6 @@ self.onmessage = (e) => {
       });
     }
   } catch (err) {
-    self.postMessage({
-      type: 'error',
-      message: String((err && err.message) || err),
-    });
+    post({ type: 'error', message: String((err && err.message) || err) });
   }
 };

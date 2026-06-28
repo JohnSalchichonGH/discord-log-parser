@@ -35,8 +35,12 @@ function getWorker() {
   }
   return worker;
 }
-// One request/response round-trip; progress messages go to onProgress.
+// One request/response round-trip; progress messages go to onProgress. Each
+// request carries a unique id and only reacts to replies with the matching id,
+// so concurrent setFiles/process calls can't resolve each other's promises.
+let workerReqId = 0;
 function workerRequest(w, message, onProgress) {
+  const id = ++workerReqId;
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       w.removeEventListener('message', onMsg);
@@ -44,6 +48,7 @@ function workerRequest(w, message, onProgress) {
     };
     const onMsg = (e) => {
       const d = e.data;
+      if (d._id !== id) return; // a different request's reply
       if (d.type === 'progress') return onProgress && onProgress(d);
       cleanup();
       if (d.type === 'error') reject(new Error(d.message));
@@ -55,7 +60,7 @@ function workerRequest(w, message, onProgress) {
     };
     w.addEventListener('message', onMsg);
     w.addEventListener('error', onErr);
-    w.postMessage(message);
+    w.postMessage({ ...message, _id: id });
   });
 }
 const fileKey = (f) => `${f.name}|${f.size}`;
@@ -730,6 +735,11 @@ function runProcessing() {
         statusEl.textContent =
           'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
         statusEl.className = 'status-bar error';
+      } else if (outputs.some((o) => o.budgetExceeded)) {
+        // Keyword-priority messages alone exceed the budget; they are all kept,
+        // so the output is larger than the selected limit.
+        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} → ${totalKept.toLocaleString()} kept — ⚠ priority messages exceed the token budget (output is larger than the limit).`;
+        statusEl.className = 'status-bar';
       } else {
         statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
         statusEl.className = 'status-bar success';
@@ -787,6 +797,7 @@ async function computeOutputs(validFiles, opts, useAccurate) {
       userMap: r.userMap,
       totalRaw: r.allMessagesCount,
       filteredCount: r.filteredCount,
+      budgetExceeded: r.budgetExceeded,
     });
   }
   return { outputs, totalMessages, totalFiltered, totalKept, engine: 'inline' };
@@ -973,7 +984,8 @@ $('downloadBtn').addEventListener('click', () => {
             break;
         }
         setTimeout(
-          () => downloadFile(text, `${po.name}_chunk${i + 1}.${ext}`),
+          () =>
+            downloadFile(text, `${safeFilename(po.name)}_chunk${i + 1}.${ext}`),
           dlCount * 400,
         );
         dlCount++;
@@ -1004,7 +1016,7 @@ $('downloadBtn').addEventListener('click', () => {
           break;
       }
       setTimeout(
-        () => downloadFile(text, `${po.name}_processed.${ext}`),
+        () => downloadFile(text, `${safeFilename(po.name)}_processed.${ext}`),
         dlCount * 400,
       );
       dlCount++;
@@ -1016,6 +1028,20 @@ $('downloadBtn').addEventListener('click', () => {
 });
 
 /* UTILITIES */
+// Strip path separators, Windows-reserved and control characters, leading dots,
+// and trailing dots/spaces from a base filename so downloads can't escape paths
+// or produce invalid names.
+function safeFilename(name) {
+  return (
+    String(name)
+      // eslint-disable-next-line no-control-regex
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+      .replace(/^\.+/, '')
+      .replace(/[. ]+$/, '')
+      .slice(0, 120) || 'export'
+  );
+}
+
 function downloadFile(content, filename) {
   const blob = new Blob([content], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);

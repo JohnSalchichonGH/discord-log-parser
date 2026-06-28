@@ -19,14 +19,14 @@ export function renderMarkdown(finalChunks, userMap, maxTokens, opts) {
   out.push('');
   out.push('## Participants');
   [...userMap.entries()]
-    .filter(([, uid]) => stats[uid])
+    .filter(([uid]) => stats[uid]) // userMap is uid -> displayName (#4)
     .sort((a, b) => {
-      const ma = /^U(\d+)$/.exec(a[1]),
-        mb = /^U(\d+)$/.exec(b[1]);
+      const ma = /^U(\d+)$/.exec(a[0]),
+        mb = /^U(\d+)$/.exec(b[0]);
       if (ma && mb) return parseInt(ma[1]) - parseInt(mb[1]);
-      return (stats[b[1]] || 0) - (stats[a[1]] || 0);
+      return (stats[b[0]] || 0) - (stats[a[0]] || 0);
     })
-    .forEach(([name, uid]) => {
+    .forEach(([uid, name]) => {
       const c = stats[uid];
       const pct = ((c / total) * 100).toFixed(1);
       out.push(

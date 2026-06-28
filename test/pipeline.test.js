@@ -37,7 +37,7 @@ describe('processGroup (HTML)', () => {
     );
     expect(allMessagesCount).toBe(3);
     expect(finalChunks).toHaveLength(3);
-    expect(userMap.get('alice')).toBe('U1');
+    expect(userMap.get('U1')).toBe('alice');
   });
 
   it('applies the user whitelist by display name', () => {
@@ -68,6 +68,31 @@ describe('processGroup (TXT)', () => {
     );
     const texts = finalChunks.flatMap((m) => m.contentParts);
     expect(texts.some((t) => t.includes('Hello world'))).toBe(true);
+  });
+});
+
+describe('keyword priority is always kept (fix #1)', () => {
+  it('keeps all priority messages even over budget and reports budgetExceeded', () => {
+    const txt = (body) => `Guild: G\nChannel: c\n\n${body}`;
+    const content = txt(
+      [
+        '[7/12/2025 3:50 AM] alice',
+        'KEEP one',
+        '',
+        '[7/12/2025 3:51 AM] alice',
+        'KEEP two',
+        '',
+        '[7/12/2025 3:52 AM] alice',
+        'KEEP three',
+        '',
+      ].join('\n'),
+    );
+    const r = processGroup(
+      [{ isTxt: true, content }],
+      baseOpts({ maxChars: 50, keywords: ['KEEP'] }),
+    );
+    expect(r.finalChunks).toHaveLength(3); // all priority retained
+    expect(r.budgetExceeded).toBe(true);
   });
 });
 
@@ -149,7 +174,7 @@ describe('processGroup (JSON)', () => {
     );
     expect(allMessagesCount).toBe(5);
     expect(finalChunks).toHaveLength(5);
-    expect(userMap.get('alice')).toBe('U1');
+    expect(userMap.get('U1')).toBe('alice');
     expect(finalChunks[0].timestamp.toISOString()).toBe(
       '2025-07-12T03:50:00.000Z',
     );

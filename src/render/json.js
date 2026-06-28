@@ -28,8 +28,9 @@ export function renderJSON(finalChunks, userMap, opts) {
   });
   return JSON.stringify(
     {
+      // userMap is uid -> displayName (#4)
       participants: Object.fromEntries(
-        [...userMap.entries()].map(([name, uid]) => [
+        [...userMap.entries()].map(([uid, name]) => [
           uid,
           opts.redactNames ? uid : name,
         ]),

@@ -15,8 +15,8 @@ const sampleJson = readFileSync(
 
 function parse(content) {
   const raw = parseMessages(content);
-  const userMap = buildUserMap([raw], false);
-  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+  const { userMap, uidOf } = buildUserMap([raw], false);
+  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, uidOf)) };
 }
 
 describe('parseJsonExport', () => {
@@ -38,11 +38,11 @@ describe('parseJsonHeader', () => {
 });
 
 describe('buildUserMap (JSON authors)', () => {
-  it('assigns short ids in first-seen order (nickname fallback)', () => {
+  it('assigns short ids in first-seen order (uid -> name, nickname fallback)', () => {
     const { userMap } = parse(sampleJson);
-    expect(userMap.get('alice')).toBe('U1');
-    expect(userMap.get('bob')).toBe('U2');
-    expect(userMap.get('CarolBot')).toBe('U3');
+    expect(userMap.get('U1')).toBe('alice');
+    expect(userMap.get('U2')).toBe('bob');
+    expect(userMap.get('U3')).toBe('CarolBot');
   });
 });
 
@@ -74,5 +74,33 @@ describe('parseMessages (JSON)', () => {
   it('maps a YouTube embed to a [YT: title] token', () => {
     const m = msgs.find((x) => x.messageId === '1005');
     expect(m.contentParts).toContain('[YT: Never Gonna Give You Up]');
+  });
+
+  it('skips messages with an unparseable timestamp (would crash JSON export)', () => {
+    const json = JSON.stringify({
+      guild: { id: '9', name: 'G' },
+      channel: { id: '1', name: 'c' },
+      dateRange: { after: null, before: null },
+      messages: [
+        {
+          id: '1',
+          type: 'Default',
+          timestamp: 'not-a-date',
+          content: 'bad',
+          author: { id: '1', name: 'a', nickname: 'a' },
+        },
+        {
+          id: '2',
+          type: 'Default',
+          timestamp: '2025-07-12T03:50:00+00:00',
+          content: 'good',
+          author: { id: '1', name: 'a', nickname: 'a' },
+        },
+      ],
+      messageCount: 2,
+    });
+    const raw = parseMessages(json);
+    expect(raw).toHaveLength(1);
+    expect(raw[0].messageId).toBe('2');
   });
 });

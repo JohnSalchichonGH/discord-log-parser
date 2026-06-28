@@ -8,9 +8,10 @@ import {
   charsForTokens,
 } from '../src/core/tokens.js';
 
+// userMap is uid -> displayName (#4)
 const userMap = new Map([
-  ['alice', 'U1'],
-  ['bob', 'U2'],
+  ['U1', 'alice'],
+  ['U2', 'bob'],
 ]);
 
 const chunks = [

@@ -80,13 +80,20 @@ export function parseMessages(content) {
   for (const m of data.messages) byId.set(m.id, m);
 
   for (const m of data.messages) {
+    // Skip messages with an unparseable timestamp — an Invalid Date would later
+    // throw in renderJSON's toISOString() and corrupt sorting elsewhere.
+    const timestamp = new Date(m.timestamp);
+    if (isNaN(timestamp.getTime())) continue;
+
     const isSystem = SYSTEM_TYPES.has(m.type);
-    let replyToName = null,
+    let replyToKey = null,
+      replyToName = null,
       replySnippet = null;
 
     if (m.type === 'Reply' && m.reference?.messageId) {
       const ref = byId.get(m.reference.messageId);
       if (ref) {
+        replyToKey = ref.author?.id || null;
         replyToName = authorDisplay(ref.author);
         let snip = (ref.content || '').replace(/\n/g, ' ').trim();
         if (snip.length > 80) snip = snip.substring(0, 80) + '…';
@@ -126,9 +133,11 @@ export function parseMessages(content) {
     if (parts.length > 0 || replyToName != null || reactions)
       messages.push({
         messageId: m.id || null,
+        authorKey: m.author?.id || null,
         authorName: authorDisplay(m.author),
-        timestamp: new Date(m.timestamp),
+        timestamp,
         isSystem,
+        replyToKey,
         replyToName,
         replySnippet,
         parts,

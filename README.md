@@ -1,6 +1,6 @@
 # Discord Log Parser
 
-A single-file, client-side HTML tool that converts Discord chat exports into compact, LLM-optimised text files. Everything runs in the browser — no server, no uploads, no dependencies.
+A client-side tool that converts Discord chat exports into compact, LLM-optimised text files, built into a single self-contained HTML file. Everything runs in the browser — no server, no uploads, and the built file makes no external network requests.
 
 ---
 
@@ -56,6 +56,13 @@ Key space-saving decisions:
 ---
 
 ## Supported input formats
+
+### JSON exports (`.json`) — recommended
+
+Produced by DiscordChatExporter with `--format Json`. This is the most reliable
+input: timestamps are ISO-8601 (locale-independent), message and author IDs are
+stable, and the structure is unambiguous. Prefer JSON whenever possible —
+especially for non-US-locale exports, where HTML/TXT date parsing can fail.
 
 ### HTML exports (`.html`)
 
@@ -125,7 +132,7 @@ Multiple export files covering the same channel are automatically merged into on
 | `Name [ID] (after YYYY-MM-DD).html` | Partial export starting from a date     |
 | Multiple base files with same ID    | All merged, sorted by modification date |
 
-**Deduplication:** Messages that appear in more than one file (overlap between exports) are deduplicated. For `.html` files the Discord message snowflake ID is used as the key. For `.txt` files the key is `timestamp|author|first 30 chars of content`. The **oldest file's version** of a duplicate message is kept.
+**Deduplication:** Messages that appear in more than one file (overlap between exports) are deduplicated. For `.html`/`.json` files the Discord message snowflake ID is used as the key. For `.txt` files (which have no message IDs) the key is `timestamp|author|full content`, and each message is allowed up to the maximum number of times it appears in any single file — so genuinely repeated messages are kept while true cross-file overlap is removed.
 
 ### Date range filter
 
@@ -211,7 +218,7 @@ All configuration — token limit, model preset, filter states, redaction toggle
 
 ## Privacy
 
-Everything runs locally in your browser. No data is sent anywhere. The built `dist/index.html` makes **zero network requests** — fonts are self-hosted and inlined, there is no analytics, and there are no runtime external dependencies. The build also embeds a strict Content-Security-Policy (`connect-src 'none'`) that blocks any network access at the browser level, and all untrusted export content is HTML-escaped before display.
+Everything runs locally in your browser. No data is sent anywhere. The built `dist/index.html` makes **zero network requests** — fonts are self-hosted and inlined, there is no analytics, and there are no external runtime dependencies. The build also embeds a restrictive Content-Security-Policy (`connect-src 'none'`, plus `default-src 'none'` with tightly scoped exceptions) that blocks the standard network APIs — `fetch`, `XMLHttpRequest`, WebSocket, `EventSource`, and `navigator.sendBeacon` — as defense-in-depth. Untrusted export content is HTML-escaped before display. (Note: because the single-file build inlines its script, the CSP necessarily allows inline scripts, so the CSP complements — but does not replace — careful escaping.)
 
 ---
 
@@ -221,6 +228,7 @@ Everything runs locally in your browser. No data is sent anywhere. The built `di
 - Reactions in `.txt` exports don't include counts (the format doesn't provide them), so they appear as `^{👍}` rather than `^{👍:3}`.
 - Edited message content is not tracked — only the current version at export time is included.
 - The default build uses the 1 token ≈ 4 characters approximation, a rough average that varies by model and tokeniser. For exact counts, use the accurate build (`dist/index-accurate.html`) and enable "Accurate token counting" — it uses a real BPE tokenizer (GPT cl100k_base), the closest public proxy for current models.
+- The token-budget trimming is calibrated for the **Compact TXT** output (it measures the rendered TXT). The JSON, Markdown, and CSV formats — and chunk sizes — may be larger than the selected budget. Keyword-priority messages are always kept even if they alone exceed the budget (the app warns when this happens).
 - System message detection in `.txt` exports is heuristic-based and may not catch all system message variants across Discord locales.
 
 ---

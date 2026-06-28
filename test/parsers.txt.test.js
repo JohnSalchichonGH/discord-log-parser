@@ -15,8 +15,8 @@ const sampleTxt = readFileSync(
 
 function parse(content) {
   const raw = parseMessages(content);
-  const userMap = buildUserMap([raw], false);
-  return { userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+  const { userMap, uidOf } = buildUserMap([raw], false);
+  return { userMap, msgs: raw.map((r) => assembleMessage(r, uidOf)) };
 }
 
 describe('parseTxtHeader', () => {
@@ -25,14 +25,20 @@ describe('parseTxtHeader', () => {
     expect(channelId).toBe('My Server|general / chat');
     expect(baseName).toBe('My Server - chat');
   });
+
+  it('falls back to txt-unknown when no Guild/Channel headers are present', () => {
+    expect(parseTxtHeader('no headers here\njust text').channelId).toBe(
+      'txt-unknown',
+    );
+  });
 });
 
 describe('parseMessages (TXT)', () => {
   const { userMap, msgs } = parse(sampleTxt);
 
-  it('assigns sequential short ids in first-seen order', () => {
-    expect(userMap.get('alice')).toBe('U1');
-    expect(userMap.get('bob')).toBe('U2');
+  it('assigns sequential short ids in first-seen order (uid -> name)', () => {
+    expect(userMap.get('U1')).toBe('alice');
+    expect(userMap.get('U2')).toBe('bob');
   });
 
   it('extracts all messages with author ids and timestamps', () => {

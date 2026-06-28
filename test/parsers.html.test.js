@@ -13,15 +13,15 @@ const sampleHtml = readFileSync(
 // across all files; here one file is enough).
 function assembleAll(html) {
   const raw = parseMessages(html);
-  const userMap = buildUserMap([raw], false);
-  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, userMap)) };
+  const { userMap, uidOf } = buildUserMap([raw], false);
+  return { raw, userMap, msgs: raw.map((r) => assembleMessage(r, uidOf)) };
 }
 
 describe('buildUserMap (HTML authors + reply authors)', () => {
-  it('assigns short ids in document order', () => {
+  it('assigns short ids in document order (userMap is uid -> name)', () => {
     const { userMap } = assembleAll(sampleHtml);
-    expect(userMap.get('alice')).toBe('U1');
-    expect(userMap.get('bob')).toBe('U2');
+    expect(userMap.get('U1')).toBe('alice');
+    expect(userMap.get('U2')).toBe('bob');
   });
 });
 

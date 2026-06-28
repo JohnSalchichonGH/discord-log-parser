@@ -46,9 +46,9 @@ export function processGroup(sortedFiles, opts) {
 
   // Phase 1: parse once (cached), build the shared userMap, assemble messages.
   const perFileRaw = sortedFiles.map(getRawMessages);
-  const userMap = buildUserMap(perFileRaw, useRealNames);
+  const { userMap, uidOf } = buildUserMap(perFileRaw, useRealNames);
   const perFileMsgs = perFileRaw.map((rawList) =>
-    rawList.map((r) => assembleMessage(r, userMap)),
+    rawList.map((r) => assembleMessage(r, uidOf)),
   );
 
   // Phase 2: deduplicate.
@@ -109,10 +109,11 @@ export function processGroup(sortedFiles, opts) {
       return hasText;
     });
   if (userFilter && userFilter.size > 0) {
+    // userMap is uid -> displayName (#4); the whitelist holds display names.
     const matchedIds = new Set(
       [...userMap.entries()]
-        .filter(([name]) => userFilter.has(name))
-        .map(([, uid]) => uid),
+        .filter(([, name]) => userFilter.has(name))
+        .map(([uid]) => uid),
     );
     filtered = filtered.filter((m) => matchedIds.has(m.authorId));
   }
@@ -141,19 +142,14 @@ export function processGroup(sortedFiles, opts) {
     }
   }
 
-  // Budget: priority first, then newest normal. The per-message cost and the
-  // legend reservation are conservative estimates (A7); a verify-and-retrim pass
-  // below trims against the real renderer so the output provably fits.
+  // Budget: keyword-priority messages are ALWAYS kept (per the README); the
+  // remaining budget is then filled with the newest normal messages. A
+  // verify-and-retrim pass below drops oldest *non-priority* messages so the
+  // output provably fits — and if the priority messages alone exceed the budget,
+  // they are still all kept (budgetExceeded is reported so the UI can warn).
   let currentChars = legendReserve(userMap.size);
-  const kept = [];
-
-  // Always keep all priority messages (budget permitting)
-  for (const m of priorityMsgs) {
-    const cost = messageCost(m);
-    if (currentChars + cost > maxChars) break;
-    currentChars += cost;
-    kept.push(m);
-  }
+  const kept = [...priorityMsgs]; // keep every priority message
+  for (const m of priorityMsgs) currentChars += messageCost(m);
 
   // Fill remaining with newest normal messages
   const reversedNormal = [...normalMsgs].reverse();
@@ -175,18 +171,14 @@ export function processGroup(sortedFiles, opts) {
   // token counter is supplied (B4), measure tokens against maxTokens; otherwise
   // fall back to the char-based estimate against maxChars.
   const prioritySet = new Set(priorityMsgs);
-  if (countTokens && maxTokens) {
-    finalChunks = fitToBudget(finalChunks, maxTokens, prioritySet, (msgs) =>
-      countTokens(renderTxt(msgs, userMap, maxTokens, {})),
-    );
-  } else {
-    finalChunks = fitToBudget(
-      finalChunks,
-      maxChars,
-      prioritySet,
-      (msgs) => renderTxt(msgs, userMap, Math.round(maxChars / 4), {}).length,
-    );
-  }
+  const limit = countTokens && maxTokens ? maxTokens : maxChars;
+  const measure =
+    countTokens && maxTokens
+      ? (msgs) => countTokens(renderTxt(msgs, userMap, maxTokens, {}))
+      : (msgs) => renderTxt(msgs, userMap, Math.round(maxChars / 4), {}).length;
+  finalChunks = fitToBudget(finalChunks, limit, prioritySet, measure);
+  // True when the retained (priority) messages still exceed the budget.
+  const budgetExceeded = finalChunks.length > 0 && measure(finalChunks) > limit;
 
   // Post-trim: low activity filter
   if (minMsgs > 0) {
@@ -205,5 +197,6 @@ export function processGroup(sortedFiles, opts) {
     userMap,
     allMessagesCount: allMessages.length,
     filteredCount: filtered.length,
+    budgetExceeded,
   };
 }

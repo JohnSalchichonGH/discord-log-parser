@@ -22,6 +22,7 @@
     "@eslint/js": "^10.0.1",
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.7.0",

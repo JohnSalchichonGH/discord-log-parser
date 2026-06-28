@@ -38,7 +38,9 @@ export function parseTxtHeader(content) {
     if (cl) channel = cl[1].trim();
   }
   const chanShort = channel.split('/').pop().trim() || channel || 'unknown';
-  const chanId = guild + '|' + channel || 'txt-unknown';
+  // Only fall back to 'txt-unknown' when both header lines are absent (the old
+  // `guild + '|' + channel` was always truthy, so the fallback never fired).
+  const chanId = guild || channel ? `${guild}|${channel}` : 'txt-unknown';
   const baseName = (guild ? guild + ' - ' : '') + chanShort;
   return { channelId: chanId, baseName };
 }
@@ -86,9 +88,11 @@ export function parseMessages(content) {
     if (parts.length > 0 || reactionStr)
       messages.push({
         messageId: null,
+        authorKey: null, // TXT exports carry no user ids
         authorName: curAuthorName,
         timestamp: curTimestamp,
         isSystem: isTxtSystemMessage(parts),
+        replyToKey: null,
         replyToName: null,
         replySnippet: null,
         parts,
