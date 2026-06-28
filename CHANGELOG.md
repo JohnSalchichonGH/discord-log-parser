@@ -14,6 +14,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   (before token trimming) off the main thread in the Web Worker, with a
   timezone toggle (UTC / local) and an in-panel per-user filter that recompute
   live. New `core/analytics.js` (pure, tested) and `ui/insights.js` renderers.
+- **Reply network & per-user drill-down** — the Insights panel now renders a
+  force-directed reply network (who replies to whom, nodes sized by message
+  count, edges weighted by reply frequency) using a hand-rolled layout. Clicking
+  a network node or a leaderboard row focuses that user: the charts recompute for
+  them alone and a reply-partners panel shows their top "replies to" / "replied
+  to by" counts, while the network stays full with the focused user highlighted.
+  Clicking the focused user again clears the focus.
 
 ## [1.0.0] - 2026-06-28
 

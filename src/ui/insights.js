@@ -108,7 +108,7 @@ function leaderboardHtml(users) {
     .map((u, i) => {
       const pct = Math.max(2, Math.round((u.count / max) * 100));
       const color = BAR_COLORS[i % BAR_COLORS.length];
-      return `<div class="chart-bar-row" title="${escHtml(u.name)} · ${u.words.toLocaleString()} words · ${u.media} media · ${u.replies} replies · ${u.activeDays} active days">
+      return `<div class="chart-bar-row insight-clickable" data-uid="${escHtml(u.id)}" style="cursor:pointer;" title="${escHtml(u.name)} · ${u.words.toLocaleString()} words · ${u.media} media · ${u.replies} replies · ${u.activeDays} active days — click to focus">
         <span class="chart-bar-label" style="width:110px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(u.name)}</span>
         <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${u.count.toLocaleString()}</div></div>
       </div>`;
@@ -145,4 +145,156 @@ export function renderInsights(stats) {
     Object.entries(stats.media).sort((a, b) => b[1] - a[1]),
     'No media.',
   );
+}
+
+// ── Reply network ────────────────────────────────────────────────────────────
+
+// Tiny force-directed layout (repulsion + edge springs + center pull), run once.
+function layout(nodes, edges, w, h, iters) {
+  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const pos = nodes.map((_, i) => ({
+    x: w / 2 + Math.cos((2 * Math.PI * i) / nodes.length) * w * 0.32,
+    y: h / 2 + Math.sin((2 * Math.PI * i) / nodes.length) * h * 0.32,
+    vx: 0,
+    vy: 0,
+  }));
+  const k = Math.sqrt((w * h) / Math.max(1, nodes.length));
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < nodes.length; i++)
+      for (let j = i + 1; j < nodes.length; j++) {
+        let dx = pos[i].x - pos[j].x,
+          dy = pos[i].y - pos[j].y;
+        const d = Math.hypot(dx, dy) || 0.01;
+        const f = ((k * k) / d) * 0.02;
+        dx /= d;
+        dy /= d;
+        pos[i].vx += dx * f;
+        pos[i].vy += dy * f;
+        pos[j].vx -= dx * f;
+        pos[j].vy -= dy * f;
+      }
+    for (const e of edges) {
+      const a = idx.get(e.from),
+        b = idx.get(e.to);
+      if (a == null || b == null || a === b) continue;
+      let dx = pos[a].x - pos[b].x,
+        dy = pos[a].y - pos[b].y;
+      const d = Math.hypot(dx, dy) || 0.01;
+      const f = ((d * d) / k) * 0.0009 * Math.min(6, e.count);
+      dx /= d;
+      dy /= d;
+      pos[a].vx -= dx * f;
+      pos[a].vy -= dy * f;
+      pos[b].vx += dx * f;
+      pos[b].vy += dy * f;
+    }
+    for (let i = 0; i < nodes.length; i++) {
+      pos[i].vx += (w / 2 - pos[i].x) * 0.006;
+      pos[i].vy += (h / 2 - pos[i].y) * 0.006;
+      pos[i].x += Math.max(-16, Math.min(16, pos[i].vx));
+      pos[i].y += Math.max(-16, Math.min(16, pos[i].vy));
+      pos[i].vx *= 0.86;
+      pos[i].vy *= 0.86;
+      pos[i].x = Math.max(24, Math.min(w - 24, pos[i].x));
+      pos[i].y = Math.max(20, Math.min(h - 24, pos[i].y));
+    }
+  }
+  return pos;
+}
+
+function networkSvg(stats, focusId) {
+  const nodes = stats.users.slice(0, 24).map((u) => ({
+    id: u.id,
+    name: u.name,
+    count: u.count,
+  }));
+  if (nodes.length < 2)
+    return '<div style="color:var(--text-muted);font-size:13px;">Not enough participants for a network.</div>';
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges = stats.replyEdges.filter(
+    (e) => e.from !== e.to && nodeIds.has(e.from) && nodeIds.has(e.to),
+  );
+  if (edges.length === 0)
+    return '<div style="color:var(--text-muted);font-size:13px;">No reply relationships found (TXT exports have no reply data).</div>';
+
+  const w = 680,
+    h = 420;
+  const pos = layout(nodes, edges, w, h, 160);
+  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const maxCount = nodes[0].count || 1;
+  const maxEdge = Math.max(...edges.map((e) => e.count));
+  const r = (c) => 6 + 16 * Math.sqrt(c / maxCount);
+
+  // Neighbours of the focused node (either direction) for highlighting.
+  const neighbours = new Set();
+  if (focusId) {
+    neighbours.add(focusId);
+    for (const e of edges) {
+      if (e.from === focusId) neighbours.add(e.to);
+      if (e.to === focusId) neighbours.add(e.from);
+    }
+  }
+  const dim = (id) => focusId && !neighbours.has(id);
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Reply network">`;
+  for (const e of edges) {
+    const a = pos[idx.get(e.from)],
+      b = pos[idx.get(e.to)];
+    const active = !focusId || e.from === focusId || e.to === focusId;
+    const op = active ? 0.12 + 0.5 * (e.count / maxEdge) : 0.05;
+    const sw = (0.6 + 2.4 * (e.count / maxEdge)).toFixed(2);
+    svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent)" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"></line>`;
+  }
+  nodes.forEach((n, i) => {
+    const p = pos[i];
+    const rad = r(n.count);
+    const o = dim(n.id) ? 0.25 : 1;
+    const isFocus = n.id === focusId;
+    svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer;" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
+    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="var(--accent)" fill-opacity="${isFocus ? 1 : 0.65}" stroke="var(--bg-surface)" stroke-width="1.5"></circle>`;
+    if (rad > 11 || isFocus)
+      svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 11).toFixed(1)}" font-size="10" text-anchor="middle" fill="var(--text-secondary)">${escHtml(n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name)}</text>`;
+    svg += `</g>`;
+  });
+  return svg + '</svg>';
+}
+
+function replyPartnersHtml(stats, focusId) {
+  if (!focusId) return '';
+  const nameOf = new Map(stats.users.map((u) => [u.id, u.name]));
+  const repliesTo = new Map();
+  const repliedBy = new Map();
+  for (const e of stats.replyEdges) {
+    if (e.from === e.to) continue;
+    if (e.from === focusId) repliesTo.set(e.to, (repliesTo.get(e.to) || 0) + e.count);
+    if (e.to === focusId) repliedBy.set(e.from, (repliedBy.get(e.from) || 0) + e.count);
+  }
+  const top = (mp) =>
+    [...mp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const rows = (list, empty) =>
+    list.length
+      ? list
+          .map(
+            ([id, c]) =>
+              `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span style="color:var(--text-primary);">${escHtml(nameOf.get(id) || id)}</span><span style="color:var(--text-secondary);font-family:var(--font-mono);">${c.toLocaleString()}</span></div>`,
+          )
+          .join('')
+      : `<div style="color:var(--text-muted);font-size:13px;">${empty}</div>`;
+  return (
+    `<div class="cols-2" style="margin-top:6px;">` +
+    `<div><div class="form-label">Replies to</div>${rows(top(repliesTo), 'None.')}</div>` +
+    `<div><div class="form-label">Replied to by</div>${rows(top(repliedBy), 'None.')}</div>` +
+    `</div>`
+  );
+}
+
+export function renderNetwork(stats, focusId) {
+  $('insightNetwork').innerHTML = networkSvg(stats, focusId);
+}
+
+export function renderPartners(stats, focusId) {
+  const el = $('insightPartners');
+  const html = replyPartnersHtml(stats, focusId);
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
 }

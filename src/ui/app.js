@@ -11,7 +11,7 @@ import {
   getFilteredMessages,
 } from '../core/pipeline.js';
 import { computeAnalytics } from '../core/analytics.js';
-import { renderInsights } from './insights.js';
+import { renderInsights, renderNetwork, renderPartners } from './insights.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader } from '../parsers/txt.js';
 import { parseJsonHeader } from '../parsers/json.js';
@@ -736,9 +736,7 @@ function runProcessing() {
       insightBaseOpts = opts;
       if (totalMessages > 0) {
         $('insightsCard').style.display = 'block';
-        refreshInsights().then((stats) => {
-          if (stats) populateInsightUserList(stats.users);
-        });
+        loadInsights();
       }
 
       fill.style.width = '100%';
@@ -859,6 +857,10 @@ $('previewGroup').addEventListener('change', function () {
 let insightFiles = [];
 let insightBaseOpts = null;
 let insightTz = 'utc';
+// Full analytics with NO user filter — the network graph and reply-partners
+// panel always reflect the whole conversation; only the main charts respond to
+// the per-user filter / drill-down focus.
+let insightFull = null;
 
 // Compute analytics over the full filtered conversation — off-thread in the
 // worker when available, else inline on the main thread.
@@ -895,12 +897,45 @@ function selectedInsightUserIds() {
   return boxes.length ? new Set(boxes.map((b) => b.value)) : null;
 }
 
-async function refreshInsights() {
+// Initial load (and after reprocessing): compute the full analytics, populate
+// the user list, then render the (unfiltered) view + network.
+async function loadInsights() {
   if (!insightFiles.length || !insightBaseOpts) return null;
-  const opts = { ...insightBaseOpts, userFilterIds: selectedInsightUserIds() };
-  const stats = await requestAnalytics(insightFiles, opts, insightTz);
-  if (stats) renderInsights(stats);
-  return stats;
+  insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
+  if (insightFull) {
+    populateInsightUserList(insightFull.users);
+    await refreshView();
+  }
+  return insightFull;
+}
+
+// Render the main charts for the current selection, plus the always-full
+// network/partners with the focused user highlighted (a single selected user).
+async function refreshView() {
+  if (!insightFull) return null;
+  const ids = selectedInsightUserIds();
+  // No filter → reuse the full analytics (avoids a redundant recompute).
+  const view = ids
+    ? await requestAnalytics(insightFiles, {
+        ...insightBaseOpts,
+        userFilterIds: ids,
+      }, insightTz)
+    : insightFull;
+  if (view) renderInsights(view);
+  const focusId = ids && ids.size === 1 ? [...ids][0] : null;
+  renderNetwork(insightFull, focusId);
+  renderPartners(insightFull, focusId);
+  return view;
+}
+
+// Drill down to a single user (toggle: clicking the sole-focused user clears it).
+function focusUser(uid) {
+  const boxes = [...$('insightUserList').querySelectorAll('input')];
+  if (!boxes.length) return;
+  const checked = boxes.filter((b) => b.checked).map((b) => b.value);
+  const soleFocus = checked.length === 1 && checked[0] === uid;
+  boxes.forEach((b) => (b.checked = soleFocus ? true : b.value === uid));
+  refreshView();
 }
 
 function populateInsightUserList(users) {
@@ -913,16 +948,29 @@ function populateInsightUserList(users) {
     .join('');
   list
     .querySelectorAll('input')
-    .forEach((cb) => cb.addEventListener('change', refreshInsights));
+    .forEach((cb) => cb.addEventListener('change', refreshView));
 }
 
-function setInsightTz(tz) {
+// Drill-down click handling (delegated, survives innerHTML re-renders): a click
+// on a leaderboard row or a network node focuses that user.
+$('insightUsers').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-uid]');
+  if (row) focusUser(row.getAttribute('data-uid'));
+});
+$('insightNetwork').addEventListener('click', (e) => {
+  const node = e.target.closest('.net-node');
+  if (node) focusUser(node.getAttribute('data-uid'));
+});
+
+async function setInsightTz(tz) {
   insightTz = tz;
   $('tzUtc').className =
     'btn ' + (tz === 'utc' ? 'btn-primary' : 'btn-secondary');
   $('tzLocal').className =
     'btn ' + (tz === 'local' ? 'btn-primary' : 'btn-secondary');
-  refreshInsights();
+  // Recompute the full analytics under the new timezone, preserving selections.
+  insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
+  await refreshView();
 }
 $('tzUtc').addEventListener('click', () => setInsightTz('utc'));
 $('tzLocal').addEventListener('click', () => setInsightTz('local'));
@@ -935,14 +983,14 @@ $('insightUserAll').addEventListener('click', (e) => {
   $('insightUserList')
     .querySelectorAll('input')
     .forEach((cb) => (cb.checked = true));
-  refreshInsights();
+  refreshView();
 });
 $('insightUserNone').addEventListener('click', (e) => {
   e.preventDefault();
   $('insightUserList')
     .querySelectorAll('input')
     .forEach((cb) => (cb.checked = false));
-  refreshInsights();
+  refreshView();
 });
 
 function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
