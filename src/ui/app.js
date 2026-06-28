@@ -887,17 +887,17 @@ async function requestAnalytics(files, opts, tz) {
   return computeAnalytics(filtered, { tz });
 }
 
-function selectedInsightUsers() {
+// Selected users as a set of stable author ids (uids), not display names —
+// names are unreliable across merged files where a user can appear under
+// different nicknames.
+function selectedInsightUserIds() {
   const boxes = [...$('insightUserList').querySelectorAll('input:checked')];
   return boxes.length ? new Set(boxes.map((b) => b.value)) : null;
 }
 
 async function refreshInsights() {
   if (!insightFiles.length || !insightBaseOpts) return null;
-  const opts = {
-    ...insightBaseOpts,
-    userFilter: selectedInsightUsers() || insightBaseOpts.userFilter,
-  };
+  const opts = { ...insightBaseOpts, userFilterIds: selectedInsightUserIds() };
   const stats = await requestAnalytics(insightFiles, opts, insightTz);
   if (stats) renderInsights(stats);
   return stats;
@@ -908,7 +908,7 @@ function populateInsightUserList(users) {
   list.innerHTML = users
     .map(
       (u) =>
-        `<label class="user-item"><input type="checkbox" value="${escHtml(u.name)}"><span class="user-name">${escHtml(u.name)}</span><span class="user-count">${u.count.toLocaleString()}</span></label>`,
+        `<label class="user-item"><input type="checkbox" value="${escHtml(u.id)}"><span class="user-name">${escHtml(u.name)}</span><span class="user-count">${u.count.toLocaleString()}</span></label>`,
     )
     .join('');
   list

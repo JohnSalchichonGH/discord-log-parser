@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { processGroup, getRawMessages } from '../src/core/pipeline.js';
+import {
+  processGroup,
+  getRawMessages,
+  getFilteredMessages,
+} from '../src/core/pipeline.js';
 import { renderTxt } from '../src/render/txt.js';
 import { chunkMessages } from '../src/core/chunking.js';
 
@@ -93,6 +97,46 @@ describe('keyword priority is always kept (fix #1)', () => {
     );
     expect(r.finalChunks).toHaveLength(3); // all priority retained
     expect(r.budgetExceeded).toBe(true);
+  });
+});
+
+describe('getFilteredMessages — userFilterIds (Insights filter)', () => {
+  // Same author id 999, two different nicknames across two merged files.
+  const mk = (id, nick, ts) =>
+    JSON.stringify({
+      guild: { id: '9', name: 'G' },
+      channel: { id: '1', name: 'c' },
+      dateRange: { after: null },
+      messages: [
+        {
+          id: String(id),
+          type: 'Default',
+          timestamp: ts,
+          content: 'm',
+          author: { id: '999', nickname: nick, name: 'x' },
+        },
+      ],
+      messageCount: 1,
+    });
+  const files = [
+    { isJson: true, content: mk(1, 'newName', '2025-07-10T00:00:00Z') },
+    { isJson: true, content: mk(2, 'oldName', '2025-07-01T00:00:00Z') },
+  ];
+
+  it('collapses one author id to a single uid across merged files', () => {
+    const { filtered } = getFilteredMessages(files, baseOpts());
+    expect(filtered).toHaveLength(2);
+    expect(new Set(filtered.map((m) => m.authorId)).size).toBe(1);
+  });
+
+  it('keeps all of a user’s messages when filtered by their stable uid', () => {
+    const { filtered } = getFilteredMessages(files, baseOpts());
+    const uid = filtered[0].authorId;
+    const r = getFilteredMessages(files, {
+      ...baseOpts(),
+      userFilterIds: new Set([uid]),
+    });
+    expect(r.filtered).toHaveLength(2); // name-independent: nothing missed
   });
 });
 

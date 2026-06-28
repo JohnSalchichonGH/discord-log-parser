@@ -114,6 +114,11 @@ export function getFilteredMessages(sortedFiles, opts) {
     );
     filtered = filtered.filter((m) => matchedIds.has(m.authorId));
   }
+  // Filter by stable author id (uid). Used by the Insights panel, which keys
+  // users by id — robust when a user has different display names across merged
+  // files (where filtering by name would miss messages).
+  if (opts.userFilterIds && opts.userFilterIds.size > 0)
+    filtered = filtered.filter((m) => opts.userFilterIds.has(m.authorId));
 
   return { filtered, userMap, allMessagesCount: allMessages.length };
 }
