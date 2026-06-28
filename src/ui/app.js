@@ -17,6 +17,7 @@ import {
   renderPartners,
   resetNetView,
 } from './insights.js';
+import { loadCalendar, setCalendarTz } from './calendar.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader } from '../parsers/txt.js';
 import { parseJsonHeader } from '../parsers/json.js';
@@ -894,6 +895,41 @@ async function requestAnalytics(files, opts, tz) {
   return computeAnalytics(filtered, { tz });
 }
 
+// Fetch the full filtered conversation as lightweight message DTOs (+ userMap)
+// for the message-explorer calendar — off-thread when the worker is available.
+async function requestMessages(files, opts) {
+  const w = getWorker();
+  if (w) {
+    try {
+      const res = await workerRequest(w, {
+        type: 'messages',
+        fileMeta: files.map((f) => ({
+          key: fileKey(f),
+          channelId: f.channelId,
+          baseName: f.baseName,
+          sortOrder: f.sortOrder,
+          afterDate: f.afterDate,
+        })),
+        opts,
+      });
+      return { messages: res.messages, userMap: new Map(res.userMap) };
+    } catch {
+      workerBroken = true;
+    }
+  }
+  const { filtered, userMap } = getFilteredMessages(files, opts);
+  return {
+    messages: filtered.map((m) => ({
+      authorId: m.authorId,
+      authorName: m.authorName,
+      ts: m.timestamp.getTime(),
+      parts: m.contentParts,
+      isSystem: m.isSystem,
+    })),
+    userMap,
+  };
+}
+
 // Selected users as a set of stable author ids (uids), not display names —
 // names are unreliable across merged files where a user can appear under
 // different nicknames.
@@ -912,6 +948,15 @@ async function loadInsights() {
     populateInsightUserList(insightFull.users);
     await refreshView();
   }
+  // Message explorer: fetch the full conversation once and hand it to the
+  // calendar (which buckets by day/hour client-side).
+  requestMessages(insightFiles, insightBaseOpts).then(({ messages, userMap }) => {
+    // Show the card BEFORE loading so the day view has a real height when the
+    // calendar measures it (otherwise it over-fills against a 0px viewport).
+    $('messageExplorerCard').style.display = 'block';
+    const has = loadCalendar(messages, userMap, insightTz);
+    if (!has) $('messageExplorerCard').style.display = 'none';
+  });
   return insightFull;
 }
 
@@ -977,6 +1022,7 @@ async function setInsightTz(tz) {
   // Recompute the full analytics under the new timezone, preserving selections.
   insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
   await refreshView();
+  setCalendarTz(insightTz); // re-bucket the explorer's days/hours
 }
 $('tzUtc').addEventListener('click', () => setInsightTz('utc'));
 $('tzLocal').addEventListener('click', () => setInsightTz('local'));

@@ -24,6 +24,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   zoom-able (scroll to zoom around the cursor, drag to pan, double-click the
   background to reset), and the whole section is hidden when the data has no
   reply relationships to graph (e.g. TXT-only exports).
+- **Message explorer** — a heat-shaded month calendar paired with a chat-style
+  day view. Days are colored by message volume; click one (or navigate months)
+  to read that day's conversation rendered with avatars, message grouping, reply
+  quotes, media chips, reaction pills and linkified URLs — not just plain text.
+  A 24-hour scrubber jumps to any hour, and scrolling near either edge lazily
+  loads earlier/later messages across day boundaries (a sliding window keeps the
+  DOM bounded). Driven client-side from the full filtered conversation the worker
+  returns once per run; respects the UTC/Local toggle. New `ui/calendar.js` and a
+  worker `messages` handler.
 
 ## [1.0.0] - 2026-06-28
 

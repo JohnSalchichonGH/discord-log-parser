@@ -105,6 +105,27 @@ self.onmessage = (e) => {
         type: 'analytics',
         stats: computeAnalytics(filtered, { tz: msg.tz }),
       });
+    } else if (msg.type === 'messages') {
+      // Full (timestamp-sorted) filtered conversation as lightweight DTOs, for
+      // the message-explorer calendar. Sent once per processing run; the UI
+      // buckets by day/hour client-side (so the tz toggle needs no round-trip).
+      const files = msg.fileMeta.map((meta) => {
+        const entry = cache.get(meta.key);
+        if (!entry) throw new Error('worker cache miss: ' + meta.key);
+        return { ...entry };
+      });
+      const { filtered, userMap } = getFilteredMessages(files, msg.opts);
+      post({
+        type: 'messages',
+        messages: filtered.map((m) => ({
+          authorId: m.authorId,
+          authorName: m.authorName,
+          ts: m.timestamp.getTime(),
+          parts: m.contentParts,
+          isSystem: m.isSystem,
+        })),
+        userMap: [...userMap.entries()],
+      });
     }
   } catch (err) {
     post({ type: 'error', message: String((err && err.message) || err) });
