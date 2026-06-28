@@ -942,7 +942,11 @@ function selectedInsightUserIds() {
 // the user list, then render the (unfiltered) view + network.
 async function loadInsights() {
   if (!insightFiles.length || !insightBaseOpts) return null;
-  insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
+  insightFull = await requestAnalytics(
+    insightFiles,
+    insightBaseOpts,
+    insightTz,
+  );
   if (insightFull) {
     resetNetView(); // fresh dataset → start the network at default zoom/pan
     populateInsightUserList(insightFull.users);
@@ -950,13 +954,15 @@ async function loadInsights() {
   }
   // Message explorer: fetch the full conversation once and hand it to the
   // calendar (which buckets by day/hour client-side).
-  requestMessages(insightFiles, insightBaseOpts).then(({ messages, userMap }) => {
-    // Show the card BEFORE loading so the day view has a real height when the
-    // calendar measures it (otherwise it over-fills against a 0px viewport).
-    $('messageExplorerCard').style.display = 'block';
-    const has = loadCalendar(messages, userMap, insightTz);
-    if (!has) $('messageExplorerCard').style.display = 'none';
-  });
+  requestMessages(insightFiles, insightBaseOpts).then(
+    ({ messages, userMap }) => {
+      // Show the card BEFORE loading so the day view has a real height when the
+      // calendar measures it (otherwise it over-fills against a 0px viewport).
+      $('messageExplorerCard').style.display = 'block';
+      const has = loadCalendar(messages, userMap, insightTz);
+      if (!has) $('messageExplorerCard').style.display = 'none';
+    },
+  );
   return insightFull;
 }
 
@@ -967,10 +973,14 @@ async function refreshView() {
   const ids = selectedInsightUserIds();
   // No filter → reuse the full analytics (avoids a redundant recompute).
   const view = ids
-    ? await requestAnalytics(insightFiles, {
-        ...insightBaseOpts,
-        userFilterIds: ids,
-      }, insightTz)
+    ? await requestAnalytics(
+        insightFiles,
+        {
+          ...insightBaseOpts,
+          userFilterIds: ids,
+        },
+        insightTz,
+      )
     : insightFull;
   if (view) renderInsights(view);
   const focusId = ids && ids.size === 1 ? [...ids][0] : null;
@@ -1020,7 +1030,11 @@ async function setInsightTz(tz) {
   $('tzLocal').className =
     'btn ' + (tz === 'local' ? 'btn-primary' : 'btn-secondary');
   // Recompute the full analytics under the new timezone, preserving selections.
-  insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
+  insightFull = await requestAnalytics(
+    insightFiles,
+    insightBaseOpts,
+    insightTz,
+  );
   await refreshView();
   setCalendarTz(insightTz); // re-bucket the explorer's days/hours
 }

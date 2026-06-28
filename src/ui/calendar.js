@@ -32,7 +32,15 @@ const MONTHS = [
   'November',
   'December',
 ];
-const DOWS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DOWS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 const DOW_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // Mon-first grid
 // Pleasant, theme-independent avatar colors picked by author-id hash.
 const AVATAR_COLORS = [
@@ -123,7 +131,12 @@ function buildIndex() {
     const k = keyOf(ts, S.tz);
     let e = S.days.get(k);
     if (!e) {
-      e = { count: 0, firstIdx: i, endIdx: S.msgs.length, hours: new Array(24).fill(0) };
+      e = {
+        count: 0,
+        firstIdx: i,
+        endIdx: S.msgs.length,
+        hours: new Array(24).fill(0),
+      };
       S.days.set(k, e);
     }
     e.count++;
@@ -132,7 +145,10 @@ function buildIndex() {
   S.dayList = [...S.days.keys()].sort();
   for (let j = 0; j < S.dayList.length; j++) {
     const e = S.days.get(S.dayList[j]);
-    e.endIdx = j + 1 < S.dayList.length ? S.days.get(S.dayList[j + 1]).firstIdx : S.msgs.length;
+    e.endIdx =
+      j + 1 < S.dayList.length
+        ? S.days.get(S.dayList[j + 1]).firstIdx
+        : S.msgs.length;
     if (e.count > S.maxDayCount) S.maxDayCount = e.count;
   }
   S.minKey = S.dayList[0] || null;
@@ -211,7 +227,8 @@ function parseParts(parts) {
   for (const p of parts) {
     if (p.startsWith('> ')) {
       const m = p.match(/^>\s*([^:]+):\s*([\s\S]*)$/);
-      if (m) reply = { who: S.umap.get(m[1].trim()) || m[1].trim(), snippet: m[2] };
+      if (m)
+        reply = { who: S.umap.get(m[1].trim()) || m[1].trim(), snippet: m[2] };
       continue;
     }
     let core = p;
@@ -262,22 +279,26 @@ function linkify(escaped) {
 }
 function mediaChip(m) {
   const icon = MEDIA_ICON[m.type] || '📎';
-  const label = m.name || (m.type ? m.type[0] + m.type.slice(1).toLowerCase() : 'Attachment');
+  const label =
+    m.name ||
+    (m.type ? m.type[0] + m.type.slice(1).toLowerCase() : 'Attachment');
   return `<span class="msg-media" title="${escHtml(m.type || 'attachment')}: ${escHtml(label)}">${icon} ${escHtml(label.length > 40 ? label.slice(0, 39) + '…' : label)}</span>`;
 }
 
 function avatar(m) {
   const name = m.authorName || '?';
-  const initials = name
-    .replace(/[^\p{L}\p{N} ]/gu, '')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || name.slice(0, 2).toUpperCase();
-  const color = AVATAR_COLORS[hashHue(m.authorId || name) % AVATAR_COLORS.length];
+  const initials =
+    name
+      .replace(/[^\p{L}\p{N} ]/gu, '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || name.slice(0, 2).toUpperCase();
+  const color =
+    AVATAR_COLORS[hashHue(m.authorId || name) % AVATAR_COLORS.length];
   return `<div class="msg-avatar" style="background:${color}">${escHtml(initials)}</div>`;
 }
 
@@ -292,7 +313,8 @@ function messageHtml(m, i, grouped) {
   if (reply)
     inner += `<div class="msg-reply"><span class="msg-reply-who">${escHtml(reply.who)}</span> ${escHtml(reply.snippet.length > 120 ? reply.snippet.slice(0, 119) + '…' : reply.snippet)}</div>`;
   if (text) inner += `<div class="msg-text">${linkify(escHtml(text))}</div>`;
-  if (media.length) inner += `<div class="msg-medias">${media.map(mediaChip).join('')}</div>`;
+  if (media.length)
+    inner += `<div class="msg-medias">${media.map(mediaChip).join('')}</div>`;
   if (reactions.length)
     inner += `<div class="msg-reacts">${reactions
       .map(
@@ -420,7 +442,11 @@ function captureAnchor() {
   const c = $('dayView');
   const st = c.scrollTop;
   for (const row of c.children) {
-    if (row.dataset && row.dataset.i != null && row.offsetTop + row.offsetHeight > st)
+    if (
+      row.dataset &&
+      row.dataset.i != null &&
+      row.offsetTop + row.offsetHeight > st
+    )
       return { i: row.dataset.i, delta: row.offsetTop - st };
   }
   return null;
@@ -452,7 +478,11 @@ function topVisibleDayKey() {
   const c = $('dayView');
   const st = c.scrollTop;
   for (const row of c.children) {
-    if (row.dataset && row.dataset.i != null && row.offsetTop + row.offsetHeight > st)
+    if (
+      row.dataset &&
+      row.dataset.i != null &&
+      row.offsetTop + row.offsetHeight > st
+    )
       return keyOf(S.msgs[+row.dataset.i].ts, S.tz);
   }
   return S.selKey;
@@ -550,6 +580,7 @@ export function setCalendarTz(tz) {
 }
 function mostActiveKey() {
   let best = S.dayList[0];
-  for (const k of S.dayList) if (S.days.get(k).count > S.days.get(best).count) best = k;
+  for (const k of S.dayList)
+    if (S.days.get(k).count > S.days.get(best).count) best = k;
   return best;
 }

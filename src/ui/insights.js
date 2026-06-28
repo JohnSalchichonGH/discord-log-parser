@@ -295,11 +295,12 @@ function replyPartnersHtml(stats, focusId) {
   const repliedBy = new Map();
   for (const e of stats.replyEdges) {
     if (e.from === e.to) continue;
-    if (e.from === focusId) repliesTo.set(e.to, (repliesTo.get(e.to) || 0) + e.count);
-    if (e.to === focusId) repliedBy.set(e.from, (repliedBy.get(e.from) || 0) + e.count);
+    if (e.from === focusId)
+      repliesTo.set(e.to, (repliesTo.get(e.to) || 0) + e.count);
+    if (e.to === focusId)
+      repliedBy.set(e.from, (repliedBy.get(e.from) || 0) + e.count);
   }
-  const top = (mp) =>
-    [...mp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const top = (mp) => [...mp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const rows = (list, empty) =>
     list.length
       ? list
@@ -409,7 +410,8 @@ function wireNetwork(host, onNodeClick) {
     if (!dragging) return;
     dragging = false;
     svg.style.cursor = 'grab';
-    if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    if (svg.hasPointerCapture(e.pointerId))
+      svg.releasePointerCapture(e.pointerId);
     // A press that didn't turn into a drag, on a node, is a focus click.
     if (!moved && downNode && onNodeClick)
       onNodeClick(downNode.getAttribute('data-uid'));
