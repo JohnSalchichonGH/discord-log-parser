@@ -1,0 +1,7 @@
+{
+  "name": "discord-log-parser",
+  "compatibility_date": "2026-06-28",
+  "assets": {
+    "directory": "./dist"
+  }
+}
