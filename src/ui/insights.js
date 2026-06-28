@@ -367,25 +367,41 @@ function wireNetwork(host, onNodeClick) {
     { passive: false },
   );
 
+  // Focus is resolved from the node under the *pointerdown* and fired on
+  // pointerup, NOT from the click event: because we take pointer capture on the
+  // svg for panning, the browser retargets the subsequent click to the svg
+  // itself, so a click handler would never see the node. We also gate it on a
+  // small movement threshold so a pan drag never counts as a focus click.
   let dragging = false,
     moved = false,
-    last = null;
+    last = null,
+    downNode = null,
+    startClient = null;
   svg.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     dragging = true;
     moved = false;
     last = toVB(e);
-    svg.setPointerCapture(e.pointerId);
+    startClient = { x: e.clientX, y: e.clientY };
+    downNode = e.target.closest('.net-node');
+    try {
+      svg.setPointerCapture(e.pointerId);
+    } catch {
+      /* not all pointer ids are capturable */
+    }
     svg.style.cursor = 'grabbing';
   });
   svg.addEventListener('pointermove', (e) => {
     if (!dragging) return;
+    if (
+      !moved &&
+      (Math.abs(e.clientX - startClient.x) > 4 ||
+        Math.abs(e.clientY - startClient.y) > 4)
+    )
+      moved = true;
     const cur = toVB(e);
-    const dx = cur.x - last.x,
-      dy = cur.y - last.y;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
-    netView.tx += dx;
-    netView.ty += dy;
+    netView.tx += cur.x - last.x;
+    netView.ty += cur.y - last.y;
     last = cur;
     apply();
   });
@@ -394,19 +410,14 @@ function wireNetwork(host, onNodeClick) {
     dragging = false;
     svg.style.cursor = 'grab';
     if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+    // A press that didn't turn into a drag, on a node, is a focus click.
+    if (!moved && downNode && onNodeClick)
+      onNodeClick(downNode.getAttribute('data-uid'));
+    downNode = null;
   };
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
 
-  // Click a node to focus — but not when the click was the tail of a drag.
-  svg.addEventListener('click', (e) => {
-    if (moved) {
-      moved = false;
-      return;
-    }
-    const node = e.target.closest('.net-node');
-    if (node && onNodeClick) onNodeClick(node.getAttribute('data-uid'));
-  });
   // Double-click empty space resets the view.
   svg.addEventListener('dblclick', (e) => {
     if (e.target.closest('.net-node')) return;
