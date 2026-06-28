@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Insights dashboard** — a new analytics panel on the Preview step: summary
+  metrics, a brushable messages-over-time chart, a day×hour activity heatmap,
+  an enhanced participant leaderboard (words / media / replies / active days),
+  and top reactions and media. Computed from the full filtered conversation
+  (before token trimming) off the main thread in the Web Worker, with a
+  timezone toggle (UTC / local) and an in-panel per-user filter that recompute
+  live. New `core/analytics.js` (pure, tested) and `ui/insights.js` renderers.
+
 ## [1.0.0] - 2026-06-28
 
 First production-ready release. The tool was reworked from a single ~2,400-line

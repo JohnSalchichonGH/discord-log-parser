@@ -25,10 +25,12 @@ export function getRawMessages(f) {
   return f._raw;
 }
 
-export function processGroup(sortedFiles, opts) {
+// Parse + dedup + apply the pre-filters (date/bots/system/media/whitelist),
+// returning the full filtered conversation (NOT token-trimmed). Shared by the
+// export pipeline (processGroup) and the Insights analytics so both see the
+// same set of messages.
+export function getFilteredMessages(sortedFiles, opts) {
   const {
-    minMsgs,
-    maxChars,
     userFilter,
     filterBots: doBotFilter,
     botSet,
@@ -36,12 +38,7 @@ export function processGroup(sortedFiles, opts) {
     filterMediaOnly: doMediaFilter,
     dateFrom,
     dateTo,
-    keywords,
     useRealNames,
-    // Optional accurate-token budgeting: when both are provided the verify pass
-    // measures real tokens against maxTokens instead of chars against maxChars.
-    countTokens,
-    maxTokens,
   } = opts;
 
   // Phase 1: parse once (cached), build the shared userMap, assemble messages.
@@ -117,6 +114,16 @@ export function processGroup(sortedFiles, opts) {
     );
     filtered = filtered.filter((m) => matchedIds.has(m.authorId));
   }
+
+  return { filtered, userMap, allMessagesCount: allMessages.length };
+}
+
+export function processGroup(sortedFiles, opts) {
+  const { minMsgs, maxChars, keywords, countTokens, maxTokens } = opts;
+  const { filtered, userMap, allMessagesCount } = getFilteredMessages(
+    sortedFiles,
+    opts,
+  );
 
   // Phase 3: Token-limit trim with keyword priority
   let priorityMsgs = [];
@@ -195,7 +202,7 @@ export function processGroup(sortedFiles, opts) {
   return {
     finalChunks,
     userMap,
-    allMessagesCount: allMessages.length,
+    allMessagesCount,
     filteredCount: filtered.length,
     budgetExceeded,
   };

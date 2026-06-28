@@ -9,7 +9,12 @@
 // avoids dynamic imports inside an inlined worker.
 
 import { buildGroups } from './core/grouping.js';
-import { processGroup, getRawMessages } from './core/pipeline.js';
+import {
+  processGroup,
+  getRawMessages,
+  getFilteredMessages,
+} from './core/pipeline.js';
+import { computeAnalytics } from './core/analytics.js';
 import { countTokens, disableAccurate } from './core/token-config.js';
 
 disableAccurate(); // worker is approx-only
@@ -86,6 +91,19 @@ self.onmessage = (e) => {
         totalMessages,
         totalFiltered,
         totalKept,
+      });
+    } else if (msg.type === 'analyze') {
+      // Analytics over the FULL filtered conversation across all files (one
+      // identity space), independent of the token-budget trim.
+      const files = msg.fileMeta.map((meta) => {
+        const entry = cache.get(meta.key);
+        if (!entry) throw new Error('worker cache miss: ' + meta.key);
+        return { ...entry };
+      });
+      const { filtered } = getFilteredMessages(files, msg.opts);
+      post({
+        type: 'analytics',
+        stats: computeAnalytics(filtered, { tz: msg.tz }),
       });
     }
   } catch (err) {

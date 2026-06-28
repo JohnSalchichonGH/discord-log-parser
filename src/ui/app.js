@@ -5,7 +5,13 @@
 import { formatBytes, escHtml } from '../core/format.js';
 import { parseFilename, buildGroups } from '../core/grouping.js';
 import { localDate } from '../core/time.js';
-import { processGroup, getRawMessages } from '../core/pipeline.js';
+import {
+  processGroup,
+  getRawMessages,
+  getFilteredMessages,
+} from '../core/pipeline.js';
+import { computeAnalytics } from '../core/analytics.js';
+import { renderInsights } from './insights.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader } from '../parsers/txt.js';
 import { parseJsonHeader } from '../parsers/json.js';
@@ -625,6 +631,7 @@ function runProcessing() {
   $('statsCard').style.display = 'none';
   $('budgetCard').style.display = 'none';
   $('previewCard').style.display = 'none';
+  $('insightsCard').style.display = 'none';
   $('toStep4').disabled = true;
 
   const progress = $('processProgress');
@@ -722,6 +729,16 @@ function runProcessing() {
         sel.value = '0';
         renderPreview(0);
         $('previewCard').style.display = 'block';
+      }
+
+      // Insights dashboard (analytics over the full filtered conversation).
+      insightFiles = validFiles;
+      insightBaseOpts = opts;
+      if (totalMessages > 0) {
+        $('insightsCard').style.display = 'block';
+        refreshInsights().then((stats) => {
+          if (stats) populateInsightUserList(stats.users);
+        });
       }
 
       fill.style.width = '100%';
@@ -836,6 +853,96 @@ function renderPreview(idx) {
 }
 $('previewGroup').addEventListener('change', function () {
   renderPreview(parseInt(this.value) || 0);
+});
+
+/* INSIGHTS (analytics dashboard) */
+let insightFiles = [];
+let insightBaseOpts = null;
+let insightTz = 'utc';
+
+// Compute analytics over the full filtered conversation — off-thread in the
+// worker when available, else inline on the main thread.
+async function requestAnalytics(files, opts, tz) {
+  const w = getWorker();
+  if (w) {
+    try {
+      const res = await workerRequest(w, {
+        type: 'analyze',
+        fileMeta: files.map((f) => ({
+          key: fileKey(f),
+          channelId: f.channelId,
+          baseName: f.baseName,
+          sortOrder: f.sortOrder,
+          afterDate: f.afterDate,
+        })),
+        opts,
+        tz,
+      });
+      return res.stats;
+    } catch {
+      workerBroken = true;
+    }
+  }
+  const { filtered } = getFilteredMessages(files, opts);
+  return computeAnalytics(filtered, { tz });
+}
+
+function selectedInsightUsers() {
+  const boxes = [...$('insightUserList').querySelectorAll('input:checked')];
+  return boxes.length ? new Set(boxes.map((b) => b.value)) : null;
+}
+
+async function refreshInsights() {
+  if (!insightFiles.length || !insightBaseOpts) return null;
+  const opts = {
+    ...insightBaseOpts,
+    userFilter: selectedInsightUsers() || insightBaseOpts.userFilter,
+  };
+  const stats = await requestAnalytics(insightFiles, opts, insightTz);
+  if (stats) renderInsights(stats);
+  return stats;
+}
+
+function populateInsightUserList(users) {
+  const list = $('insightUserList');
+  list.innerHTML = users
+    .map(
+      (u) =>
+        `<label class="user-item"><input type="checkbox" value="${escHtml(u.name)}"><span class="user-name">${escHtml(u.name)}</span><span class="user-count">${u.count.toLocaleString()}</span></label>`,
+    )
+    .join('');
+  list
+    .querySelectorAll('input')
+    .forEach((cb) => cb.addEventListener('change', refreshInsights));
+}
+
+function setInsightTz(tz) {
+  insightTz = tz;
+  $('tzUtc').className =
+    'btn ' + (tz === 'utc' ? 'btn-primary' : 'btn-secondary');
+  $('tzLocal').className =
+    'btn ' + (tz === 'local' ? 'btn-primary' : 'btn-secondary');
+  refreshInsights();
+}
+$('tzUtc').addEventListener('click', () => setInsightTz('utc'));
+$('tzLocal').addEventListener('click', () => setInsightTz('local'));
+$('insightUserHeader').addEventListener('click', function () {
+  this.classList.toggle('open');
+  $('insightUserBody').classList.toggle('open');
+});
+$('insightUserAll').addEventListener('click', (e) => {
+  e.preventDefault();
+  $('insightUserList')
+    .querySelectorAll('input')
+    .forEach((cb) => (cb.checked = true));
+  refreshInsights();
+});
+$('insightUserNone').addEventListener('click', (e) => {
+  e.preventDefault();
+  $('insightUserList')
+    .querySelectorAll('input')
+    .forEach((cb) => (cb.checked = false));
+  refreshInsights();
 });
 
 function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {
