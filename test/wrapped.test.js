@@ -70,4 +70,17 @@ describe('computeWrapped', () => {
     expect(w.longest.name).toBe('alice');
     expect(w.topPair).toEqual({ from: 'bob', to: 'alice', count: 2 });
   });
+
+  it('derives rhythm, podium and behavioral patterns', () => {
+    // Jan 1 2025 is a Wednesday (dow 3), and it ties for busiest weekday.
+    expect(w.busiestDow).toBe(3);
+    expect(w.timeline).toEqual([2, 2, 1]); // daily counts feed the sparkline
+    expect(w.avgPerDay).toBe(2); // 5 messages / 3 active days
+    expect(w.top3[0].name).toBe('alice');
+    // alice posts the first message of all three days.
+    expect(w.starter).toEqual({ name: 'alice', count: 3 });
+    // No messages before 6am and no day gaps in this fixture.
+    expect(w.nightOwl).toBeNull();
+    expect(w.quietGap).toBeNull();
+  });
 });

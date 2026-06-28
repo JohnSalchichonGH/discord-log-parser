@@ -48,15 +48,73 @@ function plainText(parts) {
   return out.join(' ');
 }
 
+function hourOf(ms, tz) {
+  const d = new Date(ms);
+  return tz === 'local' ? d.getHours() : d.getUTCHours();
+}
+function dayKeyOf(ms, tz) {
+  const d = new Date(ms);
+  const y = tz === 'local' ? d.getFullYear() : d.getUTCFullYear();
+  const mo = (tz === 'local' ? d.getMonth() : d.getUTCMonth()) + 1;
+  const day = tz === 'local' ? d.getDate() : d.getUTCDate();
+  return `${y}-${String(mo).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+const topEntry = (mp) => {
+  let best = null;
+  for (const [name, count] of mp) if (!best || count > best.count) best = { name, count };
+  return best;
+};
+
 // messages: [{ authorId, authorName, ts, parts, isSystem }]
-// stats: the computeAnalytics() result.
-export function computeWrapped(messages, stats) {
+// stats: the computeAnalytics() result. tz: 'utc' | 'local' (for late-night /
+// conversation-starter bucketing; charts come from the already-bucketed stats).
+export function computeWrapped(messages, stats, tz) {
+  tz = tz === 'local' ? 'local' : 'utc';
   const nameOf = new Map(stats.users.map((u) => [u.id, u.name]));
 
   const busiest = stats.timeline.reduce(
     (a, b) => (a && a.count >= b.count ? a : b),
     null,
   );
+
+  // Weekly + hourly rhythm from the (tz-bucketed) heatmap. heatmap[dow][hour],
+  // dow 0=Sun..6=Sat.
+  const dow = new Array(7).fill(0);
+  const hour = new Array(24).fill(0);
+  for (let d = 0; d < 7; d++)
+    for (let h = 0; h < 24; h++) {
+      dow[d] += stats.heatmap[d][h];
+      hour[h] += stats.heatmap[d][h];
+    }
+  let busiestDow = 0;
+  for (let d = 1; d < 7; d++) if (dow[d] > dow[busiestDow]) busiestDow = d;
+
+  // Late-night owls (00:00–05:59) and conversation starters (first message of a
+  // day) — both need per-message bucketing in the selected timezone.
+  const lateBy = new Map();
+  const firstOfDay = new Map(); // dayKey -> { ts, author }
+  for (const m of messages || []) {
+    if (m.isSystem) continue;
+    if (hourOf(m.ts, tz) < 6)
+      lateBy.set(m.authorName, (lateBy.get(m.authorName) || 0) + 1);
+    const dk = dayKeyOf(m.ts, tz);
+    const cur = firstOfDay.get(dk);
+    if (!cur || m.ts < cur.ts) firstOfDay.set(dk, { ts: m.ts, author: m.authorName });
+  }
+  const starterBy = new Map();
+  for (const { author } of firstOfDay.values())
+    starterBy.set(author, (starterBy.get(author) || 0) + 1);
+
+  // Longest stretch of silence between two active days.
+  const dayMs = stats.timeline
+    .map((d) => Date.parse(d.date + 'T00:00:00Z'))
+    .sort((a, b) => a - b);
+  let quietGap = null;
+  for (let i = 1; i < dayMs.length; i++) {
+    const g = (dayMs[i] - dayMs[i - 1]) / 86400000 - 1;
+    if (g > 0 && (!quietGap || g > quietGap.days))
+      quietGap = { days: g, from: dayMs[i - 1], to: dayMs[i] };
+  }
 
   let mostReacted = null;
   let longest = null;
@@ -96,5 +154,17 @@ export function computeWrapped(messages, stats) {
           count: topPairEdge.count,
         }
       : null,
+    timeline: stats.timeline.map((x) => x.count), // daily counts for the sparkline
+    dow, // number[7], 0=Sun..6=Sat
+    hour, // number[24]
+    busiestDow,
+    top3: stats.users.slice(0, 3), // podium
+    top3Emoji: stats.reactions.slice(0, 3),
+    avgPerDay: stats.totals.activeDays
+      ? Math.round(stats.totals.messages / stats.totals.activeDays)
+      : 0,
+    nightOwl: topEntry(lateBy), // { name, count } | null
+    starter: topEntry(starterBy), // { name, count } | null
+    quietGap, // { days, from, to } | null
   };
 }

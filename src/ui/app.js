@@ -981,7 +981,7 @@ function renderWrappedRecap() {
     $('wrappedCard').style.display = 'none';
     return;
   }
-  const data = computeWrapped(browseMessages, insightFull);
+  const data = computeWrapped(browseMessages, insightFull, insightTz);
   renderWrapped('wrappedPoster', data, { tz: insightTz });
   $('wrappedCard').style.display = 'block';
 }
