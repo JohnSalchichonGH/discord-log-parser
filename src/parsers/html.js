@@ -1,158 +1,167 @@
-// Parser for DCE HTML exports. Parses the document ONCE into userMap-independent
-// raw messages (see core/assemble.js); author-id mapping happens later.
+// Parser for DCE HTML exports. Parses ONCE into userMap-independent raw messages
+// (see core/assemble.js).
+//
+// Uses htmlparser2 (DOM-free) + css-select instead of the browser DOMParser, so
+// this runs in a Web Worker and avoids building a heavy browser DOM for large
+// exports. The query logic mirrors the previous querySelectorAll code, so
+// behavior is pinned by the existing HTML fixture/tests.
 //
 // messageId comes from the clean `data-message-id` snowflake (A3); timestamps
 // are derived from that snowflake's embedded creation time (locale-independent,
 // A1/A8), falling back to the rendered title only for older exports.
-//
-// Uses window.location.href as a URL base, so it is not yet Worker-safe.
 
+import { parseDocument } from 'htmlparser2';
+import { selectAll, selectOne } from 'css-select';
+import { textContent, getAttributeValue } from 'domutils';
 import { parseTimestamp } from '../core/time.js';
 import { snowflakeToDate } from '../core/snowflake.js';
 
+const text = (el) => (el ? textContent(el).trim() : '');
+const attr = (el, name) => (el ? getAttributeValue(el, name) : undefined);
+
+// Extract a filename from an attachment href without needing window.location
+// (worker-safe). Absolute URLs parse directly; relative paths are handled too.
+function fileNameFromHref(href) {
+  let pathname;
+  try {
+    pathname = new URL(href).pathname;
+  } catch {
+    pathname = href.split('?')[0].split('#')[0];
+  }
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    /* keep as-is */
+  }
+  return pathname.split('/').pop().split('?')[0];
+}
+
 export function parseMessages(htmlString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, 'text/html');
+  const doc = parseDocument(htmlString);
   const messages = [];
 
-  doc.querySelectorAll('.chatlog__message-group').forEach((group) => {
+  for (const group of selectAll('.chatlog__message-group', doc)) {
     const authorTag =
-      group.querySelector('.chatlog__author') ||
-      group.querySelector('.chatlog__system-notification-author');
-    const authorName = authorTag ? authorTag.textContent.trim() : 'Unknown';
+      selectOne('.chatlog__author', group) ||
+      selectOne('.chatlog__system-notification-author', group);
+    const authorName = authorTag ? text(authorTag) : 'Unknown';
 
-    group
-      .querySelectorAll('.chatlog__message-container')
-      .forEach((container) => {
-        // A3: prefer the clean snowflake in data-message-id; fall back to the
-        // legacy container id (older exports used id="message-<id>").
-        const rawId = container.id || '';
-        const messageId =
-          container.getAttribute('data-message-id') ||
-          (rawId.startsWith('message-') ? rawId.slice(8) : rawId || null);
+    for (const container of selectAll('.chatlog__message-container', group)) {
+      // A3: prefer the clean snowflake in data-message-id; fall back to the
+      // legacy container id (older exports used id="message-<id>").
+      const rawId = attr(container, 'id') || '';
+      const messageId =
+        attr(container, 'data-message-id') ||
+        (rawId.startsWith('message-') ? rawId.slice(8) : rawId || null);
 
-        // A1/A8: derive an exact UTC instant from the snowflake when possible;
-        // otherwise fall back to parsing the locale-dependent timestamp title.
-        let timestamp = snowflakeToDate(messageId);
-        if (!timestamp) {
-          const tsTag = container.querySelector(
-            '.chatlog__timestamp, .chatlog__short-timestamp, .chatlog__system-notification-timestamp',
-          );
-          if (!tsTag || !tsTag.title) return;
-          timestamp = parseTimestamp(tsTag.title);
-        }
-        if (!timestamp) return;
-
-        const isSystem = !!container.querySelector(
-          '.chatlog__system-notification-content',
+      // A1/A8: derive an exact UTC instant from the snowflake when possible;
+      // otherwise fall back to parsing the locale-dependent timestamp title.
+      let timestamp = snowflakeToDate(messageId);
+      if (!timestamp) {
+        const tsTag = selectOne(
+          '.chatlog__timestamp, .chatlog__short-timestamp, .chatlog__system-notification-timestamp',
+          container,
         );
+        const title = attr(tsTag, 'title');
+        if (!title) continue;
+        timestamp = parseTimestamp(title);
+      }
+      if (!timestamp) continue;
 
-        // Reply
-        let replyToName = null,
-          replySnippet = null;
-        const replyDiv = container.querySelector('.chatlog__reply');
-        if (replyDiv) {
-          const rAuthor = replyDiv.querySelector('.chatlog__reply-author');
-          if (rAuthor) {
-            replyToName = rAuthor.textContent.trim();
-            const rConDiv = replyDiv.querySelector('.chatlog__reply-content');
-            replySnippet = '…';
-            if (rConDiv) {
-              const raw = rConDiv.textContent.trim().replace(/\n/g, ' ');
-              // A6: both placeholder strings DCE emits for content-less replies.
-              const isPlaceholder =
-                raw.includes('Click to see original') ||
-                raw.includes('Click to see attachment');
-              if (raw && !isPlaceholder)
-                replySnippet =
-                  raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
-            }
+      const sysContentEl = selectOne(
+        '.chatlog__system-notification-content',
+        container,
+      );
+      const isSystem = !!sysContentEl;
+
+      // Reply
+      let replyToName = null,
+        replySnippet = null;
+      const replyDiv = selectOne('.chatlog__reply', container);
+      if (replyDiv) {
+        const rAuthor = selectOne('.chatlog__reply-author', replyDiv);
+        if (rAuthor) {
+          replyToName = text(rAuthor);
+          const rConDiv = selectOne('.chatlog__reply-content', replyDiv);
+          replySnippet = '…';
+          if (rConDiv) {
+            const raw = text(rConDiv).replace(/\n/g, ' ');
+            // A6: both placeholder strings DCE emits for content-less replies.
+            const isPlaceholder =
+              raw.includes('Click to see original') ||
+              raw.includes('Click to see attachment');
+            if (raw && !isPlaceholder)
+              replySnippet = raw.length > 80 ? raw.substring(0, 80) + '…' : raw;
           }
         }
+      }
 
-        const parts = [];
+      const parts = [];
 
-        // Content
-        const sysContent = container.querySelector(
-          '.chatlog__system-notification-content',
-        );
-        if (sysContent) {
-          parts.push(`[${sysContent.textContent.trim()}]`);
-        } else {
-          const msgContent = container.querySelector(
-            '.chatlog__markdown-preserve',
-          );
-          if (msgContent) {
-            const text = msgContent.textContent.trim();
-            if (text) parts.push(text);
-          }
+      // Content
+      if (sysContentEl) {
+        parts.push(`[${text(sysContentEl)}]`);
+      } else {
+        const msgContent = selectOne('.chatlog__markdown-preserve', container);
+        const t = text(msgContent);
+        if (t) parts.push(t);
+      }
+
+      // Attachments
+      for (const att of selectAll('.chatlog__attachment', container)) {
+        const href =
+          attr(att, 'href') || attr(selectOne('img, video', att), 'src') || '';
+        if (!href) continue;
+        const fname = fileNameFromHref(href);
+        const ext = fname.split('.').pop().toLowerCase();
+        if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext))
+          parts.push(`[${ext === 'gif' ? 'GIF' : 'IMG'}: ${fname}]`);
+        else if (['mp4', 'mov', 'webm'].includes(ext))
+          parts.push(`[VID: ${fname}]`);
+        else parts.push(`[MEDIA: ${fname}]`);
+      }
+
+      // Embeds
+      for (const embed of selectAll('.chatlog__embed', container)) {
+        if (selectOne('video', embed)) {
+          parts.push('[VID: Embedded Video]');
+          continue;
         }
+        const provider = selectOne('.chatlog__embed-provider', embed);
+        const title = selectOne('.chatlog__embed-title', embed);
+        if (provider && text(provider).includes('YouTube'))
+          parts.push(`[YT: ${title ? text(title) : 'Video'}]`);
+        else if (title) parts.push(`[EMBED: ${text(title)}]`);
+      }
 
-        // Attachments
-        container.querySelectorAll('.chatlog__attachment').forEach((att) => {
-          const href =
-            att.href || (att.querySelector('img, video') || {}).src || '';
-          if (!href) return;
-          try {
-            const urlObj = new URL(href, window.location.href);
-            const pathname = decodeURIComponent(urlObj.pathname);
-            const fname = pathname.split('/').pop().split('?')[0];
-            const ext = fname.split('.').pop().toLowerCase();
-            if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext))
-              parts.push(`[${ext === 'gif' ? 'GIF' : 'IMG'}: ${fname}]`);
-            else if (['mp4', 'mov', 'webm'].includes(ext))
-              parts.push(`[VID: ${fname}]`);
-            else parts.push(`[MEDIA: ${fname}]`);
-          } catch {
-            parts.push('[MEDIA: unknown]');
-          }
+      // Stickers
+      if (selectOne('.chatlog__sticker', container)) parts.push('[STICKER]');
+
+      // Reactions
+      let reactions = null;
+      const reactionEls = selectAll('.chatlog__reaction', container);
+      if (reactionEls.length > 0) {
+        const reactList = reactionEls.map((r) => {
+          const img = selectOne('img', r);
+          const alt = img ? (getAttributeValue(img, 'alt') ?? '') : '?';
+          const countEl = selectOne('.chatlog__reaction-count', r);
+          return `${alt}:${countEl ? text(countEl) : '1'}`;
         });
+        reactions = `^{${reactList.join(', ')}}`;
+      }
 
-        // Embeds
-        container.querySelectorAll('.chatlog__embed').forEach((embed) => {
-          if (embed.querySelector('video')) {
-            parts.push('[VID: Embedded Video]');
-            return;
-          }
-          const provider = embed.querySelector('.chatlog__embed-provider');
-          const title = embed.querySelector('.chatlog__embed-title');
-          if (provider && provider.textContent.includes('YouTube'))
-            parts.push(`[YT: ${title ? title.textContent.trim() : 'Video'}]`);
-          else if (title) parts.push(`[EMBED: ${title.textContent.trim()}]`);
+      if (parts.length > 0 || replyToName != null || reactions)
+        messages.push({
+          messageId,
+          authorName,
+          timestamp,
+          isSystem,
+          replyToName,
+          replySnippet,
+          parts,
+          reactions,
         });
-
-        // Stickers
-        if (container.querySelector('.chatlog__sticker'))
-          parts.push('[STICKER]');
-
-        // Reactions
-        let reactions = null;
-        const reactionEls = container.querySelectorAll('.chatlog__reaction');
-        if (reactionEls.length > 0) {
-          const reactList = [];
-          reactionEls.forEach((r) => {
-            const img = r.querySelector('img');
-            const alt = img ? img.alt : '?';
-            const countTag = r.querySelector('.chatlog__reaction-count');
-            reactList.push(
-              `${alt}:${countTag ? countTag.textContent.trim() : '1'}`,
-            );
-          });
-          reactions = `^{${reactList.join(', ')}}`;
-        }
-
-        if (parts.length > 0 || replyToName != null || reactions)
-          messages.push({
-            messageId,
-            authorName,
-            timestamp,
-            isSystem,
-            replyToName,
-            replySnippet,
-            parts,
-            reactions,
-          });
-      });
-  });
+    }
+  }
   return messages;
 }
