@@ -11,7 +11,12 @@ import {
   getFilteredMessages,
 } from '../core/pipeline.js';
 import { computeAnalytics } from '../core/analytics.js';
-import { renderInsights, renderNetwork, renderPartners } from './insights.js';
+import {
+  renderInsights,
+  renderNetwork,
+  renderPartners,
+  resetNetView,
+} from './insights.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader } from '../parsers/txt.js';
 import { parseJsonHeader } from '../parsers/json.js';
@@ -903,6 +908,7 @@ async function loadInsights() {
   if (!insightFiles.length || !insightBaseOpts) return null;
   insightFull = await requestAnalytics(insightFiles, insightBaseOpts, insightTz);
   if (insightFull) {
+    resetNetView(); // fresh dataset → start the network at default zoom/pan
     populateInsightUserList(insightFull.users);
     await refreshView();
   }
@@ -923,7 +929,10 @@ async function refreshView() {
     : insightFull;
   if (view) renderInsights(view);
   const focusId = ids && ids.size === 1 ? [...ids][0] : null;
-  renderNetwork(insightFull, focusId);
+  // The network/partners always reflect the full conversation. Hide the whole
+  // section (header included) when there are no reply relationships to graph.
+  const hasNetwork = renderNetwork(insightFull, focusId, focusUser);
+  $('insightNetworkSection').style.display = hasNetwork ? 'block' : 'none';
   renderPartners(insightFull, focusId);
   return view;
 }
@@ -951,15 +960,12 @@ function populateInsightUserList(users) {
     .forEach((cb) => cb.addEventListener('change', refreshView));
 }
 
-// Drill-down click handling (delegated, survives innerHTML re-renders): a click
-// on a leaderboard row or a network node focuses that user.
+// Leaderboard drill-down (delegated, survives innerHTML re-renders): a click on
+// a row focuses that user. Network node clicks are handled inside the network
+// itself (wireNetwork) so they can be distinguished from pan drags.
 $('insightUsers').addEventListener('click', (e) => {
   const row = e.target.closest('[data-uid]');
   if (row) focusUser(row.getAttribute('data-uid'));
-});
-$('insightNetwork').addEventListener('click', (e) => {
-  const node = e.target.closest('.net-node');
-  if (node) focusUser(node.getAttribute('data-uid'));
 });
 
 async function setInsightTz(tz) {

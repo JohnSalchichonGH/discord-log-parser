@@ -202,14 +202,13 @@ function layout(nodes, edges, w, h, iters) {
   return pos;
 }
 
-function networkSvg(stats, focusId) {
-  // Only participants who actually reply to / are replied to by someone belong
-  // in a reply network. Restricting to connected users keeps TXT exports (which
-  // carry no reply data) and other reply-less participants from piling up as
-  // overlapping isolated dots.
+// Build the node/edge set for the reply network, or null when there's nothing
+// to graph. Only participants who actually reply to / are replied to by someone
+// belong here — restricting to connected users keeps TXT exports (which carry no
+// reply data) and other reply-less participants out entirely.
+function buildNetwork(stats) {
   const realEdges = stats.replyEdges.filter((e) => e.from !== e.to);
-  if (realEdges.length === 0)
-    return '<div style="color:var(--text-muted);font-size:13px;">No reply relationships to graph. Reply data comes from HTML/JSON exports — TXT exports don’t record reply targets.</div>';
+  if (realEdges.length === 0) return null;
 
   const connected = new Set();
   for (const e of realEdges) {
@@ -232,9 +231,12 @@ function networkSvg(stats, focusId) {
   nodes = nodes.filter((n) => withEdge.has(n.id));
   nodeIds = new Set(nodes.map((n) => n.id));
   edges = edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
-  if (nodes.length < 2)
-    return '<div style="color:var(--text-muted);font-size:13px;">Not enough connected participants for a network.</div>';
+  if (nodes.length < 2) return null;
+  return { nodes, edges };
+}
 
+function networkSvg(net, focusId) {
+  const { nodes, edges } = net;
   const w = 700,
     h = 460;
   const pos = layout(nodes, edges, w, h, 220);
@@ -254,7 +256,9 @@ function networkSvg(stats, focusId) {
   }
   const dim = (id) => focusId && !neighbours.has(id);
 
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;max-height:520px" role="img" aria-label="Reply network">`;
+  // The .net-vp group is what pan/zoom transforms; the SVG viewBox stays fixed.
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;max-height:520px;cursor:grab;touch-action:none;user-select:none" role="img" aria-label="Reply network — scroll to zoom, drag to pan">`;
+  svg += `<g class="net-vp">`;
   // Edges first (under the nodes).
   for (const e of edges) {
     const a = pos[idx.get(e.from)],
@@ -281,7 +285,7 @@ function networkSvg(stats, focusId) {
     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;
   });
-  return svg + '</svg>';
+  return svg + '</g></svg>';
 }
 
 function replyPartnersHtml(stats, focusId) {
@@ -313,8 +317,118 @@ function replyPartnersHtml(stats, focusId) {
   );
 }
 
-export function renderNetwork(stats, focusId) {
-  $('insightNetwork').innerHTML = networkSvg(stats, focusId);
+// Pan/zoom view state, persisted across re-renders (e.g. focus changes) so the
+// user's framing survives a redraw. Reset when a new dataset is loaded.
+const netView = { s: 1, tx: 0, ty: 0 };
+export function resetNetView() {
+  netView.s = 1;
+  netView.tx = 0;
+  netView.ty = 0;
+}
+
+// Wire scroll-to-zoom (around the cursor) and drag-to-pan onto a freshly
+// rendered network SVG, plus click-to-focus that ignores drags. All listeners
+// live on the <svg>, which is replaced on every render, so nothing accumulates.
+function wireNetwork(host, onNodeClick) {
+  const svg = host.querySelector('svg');
+  const vp = host.querySelector('.net-vp');
+  if (!svg || !vp) return;
+
+  const apply = () =>
+    vp.setAttribute(
+      'transform',
+      `translate(${netView.tx.toFixed(2)} ${netView.ty.toFixed(2)}) scale(${netView.s.toFixed(3)})`,
+    );
+  // Client coords -> viewBox units (accounts for viewBox + preserveAspectRatio).
+  const toVB = (e) => {
+    const m = svg.getScreenCTM();
+    if (!m) return { x: 0, y: 0 };
+    const p = svg.createSVGPoint();
+    p.x = e.clientX;
+    p.y = e.clientY;
+    const r = p.matrixTransform(m.inverse());
+    return { x: r.x, y: r.y };
+  };
+
+  svg.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      const { x, y } = toVB(e);
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const s2 = Math.max(0.4, Math.min(6, netView.s * factor));
+      const k = s2 / netView.s;
+      // Keep the point under the cursor fixed while scaling.
+      netView.tx = x - (x - netView.tx) * k;
+      netView.ty = y - (y - netView.ty) * k;
+      netView.s = s2;
+      apply();
+    },
+    { passive: false },
+  );
+
+  let dragging = false,
+    moved = false,
+    last = null;
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true;
+    moved = false;
+    last = toVB(e);
+    svg.setPointerCapture(e.pointerId);
+    svg.style.cursor = 'grabbing';
+  });
+  svg.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const cur = toVB(e);
+    const dx = cur.x - last.x,
+      dy = cur.y - last.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+    netView.tx += dx;
+    netView.ty += dy;
+    last = cur;
+    apply();
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    svg.style.cursor = 'grab';
+    if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
+  };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+
+  // Click a node to focus — but not when the click was the tail of a drag.
+  svg.addEventListener('click', (e) => {
+    if (moved) {
+      moved = false;
+      return;
+    }
+    const node = e.target.closest('.net-node');
+    if (node && onNodeClick) onNodeClick(node.getAttribute('data-uid'));
+  });
+  // Double-click empty space resets the view.
+  svg.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.net-node')) return;
+    resetNetView();
+    apply();
+  });
+
+  apply();
+}
+
+// Render the reply network. Returns false (and clears the host) when there's
+// nothing to graph, so the caller can hide the whole section.
+export function renderNetwork(stats, focusId, onNodeClick) {
+  const host = $('insightNetwork');
+  const net = buildNetwork(stats);
+  if (!net) {
+    host.innerHTML = '';
+    return false;
+  }
+  host.innerHTML = networkSvg(net, focusId);
+  wireNetwork(host, onNodeClick);
+  return true;
 }
 
 export function renderPartners(stats, focusId) {

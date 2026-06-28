@@ -20,7 +20,10 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   a network node or a leaderboard row focuses that user: the charts recompute for
   them alone and a reply-partners panel shows their top "replies to" / "replied
   to by" counts, while the network stays full with the focused user highlighted.
-  Clicking the focused user again clears the focus.
+  Clicking the focused user again clears the focus. The network is pan- and
+  zoom-able (scroll to zoom around the cursor, drag to pan, double-click the
+  background to reset), and the whole section is hidden when the data has no
+  reply relationships to graph (e.g. TXT-only exports).
 
 ## [1.0.0] - 2026-06-28
 
