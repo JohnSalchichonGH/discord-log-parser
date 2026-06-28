@@ -165,7 +165,7 @@ function layout(nodes, edges, w, h, iters) {
         let dx = pos[i].x - pos[j].x,
           dy = pos[i].y - pos[j].y;
         const d = Math.hypot(dx, dy) || 0.01;
-        const f = ((k * k) / d) * 0.02;
+        const f = ((k * k) / d) * 0.032;
         dx /= d;
         dy /= d;
         pos[i].vx += dx * f;
@@ -203,27 +203,45 @@ function layout(nodes, edges, w, h, iters) {
 }
 
 function networkSvg(stats, focusId) {
-  const nodes = stats.users.slice(0, 24).map((u) => ({
-    id: u.id,
-    name: u.name,
-    count: u.count,
-  }));
-  if (nodes.length < 2)
-    return '<div style="color:var(--text-muted);font-size:13px;">Not enough participants for a network.</div>';
-  const nodeIds = new Set(nodes.map((n) => n.id));
-  const edges = stats.replyEdges.filter(
-    (e) => e.from !== e.to && nodeIds.has(e.from) && nodeIds.has(e.to),
-  );
-  if (edges.length === 0)
-    return '<div style="color:var(--text-muted);font-size:13px;">No reply relationships found (TXT exports have no reply data).</div>';
+  // Only participants who actually reply to / are replied to by someone belong
+  // in a reply network. Restricting to connected users keeps TXT exports (which
+  // carry no reply data) and other reply-less participants from piling up as
+  // overlapping isolated dots.
+  const realEdges = stats.replyEdges.filter((e) => e.from !== e.to);
+  if (realEdges.length === 0)
+    return '<div style="color:var(--text-muted);font-size:13px;">No reply relationships to graph. Reply data comes from HTML/JSON exports — TXT exports don’t record reply targets.</div>';
 
-  const w = 680,
-    h = 420;
-  const pos = layout(nodes, edges, w, h, 160);
+  const connected = new Set();
+  for (const e of realEdges) {
+    connected.add(e.from);
+    connected.add(e.to);
+  }
+  // Top connected users by message count (already sorted desc in stats.users).
+  let nodes = stats.users
+    .filter((u) => connected.has(u.id))
+    .slice(0, 28)
+    .map((u) => ({ id: u.id, name: u.name, count: u.count }));
+  let nodeIds = new Set(nodes.map((n) => n.id));
+  let edges = realEdges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  // After capping the node count, drop any node left without a visible edge.
+  const withEdge = new Set();
+  for (const e of edges) {
+    withEdge.add(e.from);
+    withEdge.add(e.to);
+  }
+  nodes = nodes.filter((n) => withEdge.has(n.id));
+  nodeIds = new Set(nodes.map((n) => n.id));
+  edges = edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  if (nodes.length < 2)
+    return '<div style="color:var(--text-muted);font-size:13px;">Not enough connected participants for a network.</div>';
+
+  const w = 700,
+    h = 460;
+  const pos = layout(nodes, edges, w, h, 220);
   const idx = new Map(nodes.map((n, i) => [n.id, i]));
   const maxCount = nodes[0].count || 1;
   const maxEdge = Math.max(...edges.map((e) => e.count));
-  const r = (c) => 6 + 16 * Math.sqrt(c / maxCount);
+  const r = (c) => 8 + 18 * Math.sqrt(c / maxCount);
 
   // Neighbours of the focused node (either direction) for highlighting.
   const neighbours = new Set();
@@ -236,24 +254,31 @@ function networkSvg(stats, focusId) {
   }
   const dim = (id) => focusId && !neighbours.has(id);
 
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Reply network">`;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;max-height:520px" role="img" aria-label="Reply network">`;
+  // Edges first (under the nodes).
   for (const e of edges) {
     const a = pos[idx.get(e.from)],
       b = pos[idx.get(e.to)];
-    const active = !focusId || e.from === focusId || e.to === focusId;
-    const op = active ? 0.12 + 0.5 * (e.count / maxEdge) : 0.05;
-    const sw = (0.6 + 2.4 * (e.count / maxEdge)).toFixed(2);
+    const touchesFocus = focusId && (e.from === focusId || e.to === focusId);
+    const faded = focusId && !touchesFocus;
+    const op = faded ? 0.04 : 0.18 + 0.55 * (e.count / maxEdge);
+    const sw = (0.7 + 3 * (e.count / maxEdge)).toFixed(2);
     svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent)" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"></line>`;
   }
+  // Nodes + labels on top.
   nodes.forEach((n, i) => {
     const p = pos[i];
     const rad = r(n.count);
-    const o = dim(n.id) ? 0.25 : 1;
     const isFocus = n.id === focusId;
-    svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer;" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
-    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="var(--accent)" fill-opacity="${isFocus ? 1 : 0.65}" stroke="var(--bg-surface)" stroke-width="1.5"></circle>`;
-    if (rad > 11 || isFocus)
-      svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 11).toFixed(1)}" font-size="10" text-anchor="middle" fill="var(--text-secondary)">${escHtml(n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name)}</text>`;
+    const o = dim(n.id) ? 0.18 : 1;
+    const fillOp = isFocus ? 1 : 0.92;
+    const label = escHtml(
+      n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name,
+    );
+    svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
+    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="var(--accent)" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
+    // Halo (paint-order: stroke) keeps labels legible over nodes/edges.
+    svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;
   });
   return svg + '</svg>';
