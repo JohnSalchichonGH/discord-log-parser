@@ -723,6 +723,20 @@ textarea { resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.5
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* ═══════════════════════════════════════════════════════════════════
+   WRAPPED RECAP
+   ═══════════════════════════════════════════════════════════════════ */
+.wrapped-poster {
+  max-width: 600px;
+  margin: 0 auto;
+}
+.wrapped-poster svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    MESSAGE EXPLORER (calendar + chat day view)
    ═══════════════════════════════════════════════════════════════════ */
 .explorer {

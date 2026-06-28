@@ -33,6 +33,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   DOM bounded). Driven client-side from the full filtered conversation the worker
   returns once per run; respects the UTC/Local toggle. New `ui/calendar.js` and a
   worker `messages` handler.
+- **Wrapped recap** — a shareable "Conversation Wrapped" poster summarizing the
+  log: totals (messages / people / words / reactions / media / longest streak),
+  most active member, busiest day, peak-time persona, favorite reaction, top
+  reply duo, and the most-reacted and longest messages. Rendered as a single
+  self-contained SVG (theme colors baked in) with a one-click **Download PNG**.
+  New `core/wrapped.js` (pure, tested) and `ui/wrapped.js`.
 
 ## [1.0.0] - 2026-06-28
 

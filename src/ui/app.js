@@ -18,6 +18,8 @@ import {
   resetNetView,
 } from './insights.js';
 import { loadCalendar, setCalendarTz } from './calendar.js';
+import { computeWrapped } from '../core/wrapped.js';
+import { renderWrapped, downloadWrappedPng } from './wrapped.js';
 import { chunkMessages } from '../core/chunking.js';
 import { parseTxtHeader } from '../parsers/txt.js';
 import { parseJsonHeader } from '../parsers/json.js';
@@ -116,6 +118,8 @@ function toggleTheme() {
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('dlp-theme', next);
   updateThemeIcon();
+  // The Wrapped poster bakes in concrete theme colors, so re-render on toggle.
+  if ($('wrappedCard').style.display !== 'none') renderWrappedRecap();
 }
 function updateThemeIcon() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -867,6 +871,9 @@ let insightTz = 'utc';
 // panel always reflect the whole conversation; only the main charts respond to
 // the per-user filter / drill-down focus.
 let insightFull = null;
+// Retained message DTOs (for the calendar + Wrapped recap) so the recap can be
+// recomputed when the timezone or theme changes without another worker round-trip.
+let browseMessages = null;
 
 // Compute analytics over the full filtered conversation — off-thread in the
 // worker when available, else inline on the main thread.
@@ -956,14 +963,27 @@ async function loadInsights() {
   // calendar (which buckets by day/hour client-side).
   requestMessages(insightFiles, insightBaseOpts).then(
     ({ messages, userMap }) => {
+      browseMessages = messages;
       // Show the card BEFORE loading so the day view has a real height when the
       // calendar measures it (otherwise it over-fills against a 0px viewport).
       $('messageExplorerCard').style.display = 'block';
       const has = loadCalendar(messages, userMap, insightTz);
       if (!has) $('messageExplorerCard').style.display = 'none';
+      renderWrappedRecap();
     },
   );
   return insightFull;
+}
+
+// Build the Wrapped recap poster from the current analytics + messages.
+function renderWrappedRecap() {
+  if (!insightFull || !browseMessages || !browseMessages.length) {
+    $('wrappedCard').style.display = 'none';
+    return;
+  }
+  const data = computeWrapped(browseMessages, insightFull);
+  renderWrapped('wrappedPoster', data, { tz: insightTz });
+  $('wrappedCard').style.display = 'block';
 }
 
 // Render the main charts for the current selection, plus the always-full
@@ -1037,9 +1057,13 @@ async function setInsightTz(tz) {
   );
   await refreshView();
   setCalendarTz(insightTz); // re-bucket the explorer's days/hours
+  renderWrappedRecap(); // peak-hour persona / busiest day depend on the tz
 }
 $('tzUtc').addEventListener('click', () => setInsightTz('utc'));
 $('tzLocal').addEventListener('click', () => setInsightTz('local'));
+$('wrappedDownload').addEventListener('click', () =>
+  downloadWrappedPng('wrappedPoster', 'conversation-wrapped.png'),
+);
 $('insightUserHeader').addEventListener('click', function () {
   this.classList.toggle('open');
   $('insightUserBody').classList.toggle('open');
