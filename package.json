@@ -1,6 +1,6 @@
 {
   "name": "discord-log-parser",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Convert Discord chat exports into compact, LLM-optimized text. Single-file, client-side.",
   "private": true,
   "type": "module",

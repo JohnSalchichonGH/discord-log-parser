@@ -1,0 +1,55 @@
+# Changelog
+
+All notable changes to this project are documented here.
+This project adheres to [Semantic Versioning](https://semver.org/).
+
+## [1.0.0] - 2026-06-28
+
+First production-ready release. The tool was reworked from a single ~2,400-line
+HTML file into a tested, modular, security-hardened app that still builds to one
+self-contained HTML file.
+
+### Added
+
+- **JSON input** (recommended) — DiscordChatExporter JSON exports parse with
+  exact ISO-8601 timestamps and clean message IDs, immune to locale issues.
+- **Accurate token counting** — optional real BPE tokenizer (GPT cl100k_base) in
+  a separate `dist/index-accurate.html` build; the default build keeps the fast
+  `1 token ≈ 4 chars` estimate.
+- **Off-thread processing** — parsing and the pipeline run in a Web Worker so
+  large exports don't freeze the UI (with a graceful main-thread fallback).
+- **Multi-group preview** — preview and copy any channel group, not just the first.
+- Persist keywords, preamble, and date range across reloads.
+- Accessibility: keyboard focus indicators, reduced-motion support, ARIA labels,
+  and live status announcements.
+- Tooling: Vite single-file build, Vitest suite (105 tests), ESLint + Prettier,
+  GitHub Actions CI.
+
+### Fixed
+
+- HTML/TXT timestamps no longer silently fail on non-US locales; HTML timestamps
+  are derived from the message snowflake (exact UTC).
+- Output timestamps render in UTC everywhere (deterministic, viewer-independent).
+- TXT parser: the export postamble is no longer slurped into the last message;
+  `{Stickers}` and `{Forwarded Message}` are handled; markdown blockquotes are no
+  longer mis-parsed as replies.
+- Reply placeholders ("Click to see attachment") no longer leak into snippets.
+- The token budget now provably fits via a verify-and-retrim pass.
+- TXT deduplication keeps legitimately-repeated messages while removing true
+  cross-file overlap.
+- A failed file read no longer hangs the app; an empty result explains why and
+  suggests re-exporting as JSON.
+
+### Security
+
+- Fixed three stored-XSS vectors reachable from malicious export content.
+- Strict Content-Security-Policy (`connect-src 'none'`) enforces "no data leaves
+  your browser" at the browser level.
+- Self-hosted, inlined fonts — the built file makes zero network requests.
+
+### Changed
+
+- Redaction (URLs / emails / phone numbers) is unified across all four output
+  formats; JSON/CSV redact content fields only so IDs and timestamps survive.
+- Developed as ES modules under `src/`; the original single file is frozen at
+  `reference/legacy-index.html` as a behavior reference.
