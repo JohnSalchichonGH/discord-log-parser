@@ -39,10 +39,7 @@ describe('buildUserMap stable identity (#4)', () => {
   });
 
   it('falls back to display name when no id is available (TXT)', () => {
-    const msgs = [
-      raw({ authorName: 'alice' }),
-      raw({ authorName: 'bob' }),
-    ];
+    const msgs = [raw({ authorName: 'alice' }), raw({ authorName: 'bob' })];
     const { uidOf } = buildUserMap([msgs], false);
     expect(uidOf(null, 'alice')).toBe('U1');
     expect(uidOf(null, 'bob')).toBe('U2');
