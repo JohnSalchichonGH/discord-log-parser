@@ -37,10 +37,29 @@ export function buildUserMap(perFileRaw, useRealNames) {
     if (nm && !nameToUid.has(nm)) nameToUid.set(nm, uid);
   };
 
-  // Pass 1: message authors (so reply authors can match an existing user by
-  // name even when the reply markup carries no id — e.g. HTML replies).
+  // Pass 1a: id-backed authors FIRST, so their identities exist before we try to
+  // resolve any id-less (TXT) authors against them.
   for (const msgs of perFileRaw)
-    for (const m of msgs) register(m.authorKey, m.authorName);
+    for (const m of msgs) if (m.authorKey) register(m.authorKey, m.authorName);
+  // Pass 1b: alias each id-backed author's USERNAME (and its pre-"#" handle) to
+  // that identity. TXT exports carry no user id and are written by username, so
+  // this lets a TXT author (e.g. "kang0420") resolve to the same person as their
+  // id-backed nickname (e.g. "k") — preventing split identities and enabling
+  // cross-format dedup. Display-name registrations always win over aliases.
+  for (const msgs of perFileRaw)
+    for (const m of msgs) {
+      if (!m.authorKey || !m.authorUsername) continue;
+      const uid = resolve(m.authorKey, m.authorName);
+      if (!uid) continue;
+      for (const alias of [m.authorUsername, m.authorUsername.split('#')[0]]) {
+        const a = (alias || '').trim();
+        if (a && !nameToUid.has(a)) nameToUid.set(a, uid);
+      }
+    }
+  // Pass 1c: id-less authors (TXT) — resolve by display name or username alias,
+  // minting a new identity only when genuinely unseen.
+  for (const msgs of perFileRaw)
+    for (const m of msgs) if (!m.authorKey) register(m.authorKey, m.authorName);
   // Pass 2: reply authors only create a new id when genuinely unseen.
   for (const msgs of perFileRaw)
     for (const m of msgs)

@@ -140,6 +140,59 @@ describe('getFilteredMessages — userFilterIds (Insights filter)', () => {
   });
 });
 
+describe('cross-format dedup (TXT copy of an id-bearing message)', () => {
+  // Same person + message exported as JSON (id "1001", nickname "k", username
+  // "kang0420") and as TXT (written by username "kang0420", no ids). Noon
+  // timestamps keep the UTC day stable across the test machine's timezone.
+  const json = JSON.stringify({
+    guild: { id: '9', name: 'G' },
+    channel: { id: '1', name: 'general' },
+    dateRange: { after: null },
+    messages: [
+      {
+        id: '1001',
+        type: 'Default',
+        timestamp: '2025-07-12T12:00:00Z',
+        content: 'greetings',
+        author: { id: '999', name: 'kang0420', nickname: 'k' },
+      },
+    ],
+    messageCount: 1,
+  });
+  const txtLine = (body) => `Guild: G\nChannel: general\n\n${body}`;
+
+  it('unifies the TXT username with the id-backed nickname and drops the dup', () => {
+    const files = [
+      { isJson: true, content: json },
+      {
+        isTxt: true,
+        content: txtLine('[7/12/2025 12:00 PM] kang0420\ngreetings\n'),
+      },
+    ];
+    const { filtered, userMap } = getFilteredMessages(files, baseOpts());
+    expect(filtered).toHaveLength(1); // TXT copy collapsed into the id-bearing one
+    expect(filtered[0].messageId).toBe('1001'); // the richer copy is kept
+    expect(userMap.get(filtered[0].authorId)).toBe('k'); // single identity
+  });
+
+  it('keeps a TXT-only message that has no id-bearing twin (since-deleted)', () => {
+    const files = [
+      { isJson: true, content: json },
+      {
+        isTxt: true,
+        content: txtLine(
+          '[7/12/2025 12:00 PM] kang0420\ngreetings\n\n[7/12/2025 12:30 PM] kang0420\nthis line was deleted before the JSON export\n',
+        ),
+      },
+    ];
+    const { filtered } = getFilteredMessages(files, baseOpts());
+    expect(filtered).toHaveLength(2); // "greetings" dedups; the deleted line stays
+    expect(
+      filtered.some((m) => m.contentParts.join(' ').includes('deleted before')),
+    ).toBe(true);
+  });
+});
+
 describe('parse-once memoization (B2)', () => {
   it('parses each file only once and reuses the cache across reprocessing', () => {
     const f = { isJson: true, content: sampleJson };

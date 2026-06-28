@@ -135,6 +135,9 @@ export function parseMessages(content) {
         messageId: m.id || null,
         authorKey: m.author?.id || null,
         authorName: authorDisplay(m.author),
+        // Username (distinct from the displayed nickname) — used to link a TXT
+        // author, which has no id and is written by username, to this identity.
+        authorUsername: (m.author?.name || '').trim() || null,
         timestamp,
         isSystem,
         replyToKey,

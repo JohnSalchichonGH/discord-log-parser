@@ -48,6 +48,10 @@ export function parseMessages(htmlString) {
     // Stable identity (#4): the author span carries data-user-id. Reply-author
     // markup has no id, so replies fall back to matching by display name.
     const authorKey = attr(authorTag, 'data-user-id') || null;
+    // The author span's title is the username (e.g. "alice#0001") — distinct
+    // from the displayed nickname. Used to link id-less TXT authors (written by
+    // username) to this identity.
+    const authorUsername = (attr(authorTag, 'title') || '').trim() || null;
 
     for (const container of selectAll('.chatlog__message-container', group)) {
       // A3: prefer the clean snowflake in data-message-id; fall back to the
@@ -158,6 +162,7 @@ export function parseMessages(htmlString) {
           messageId,
           authorKey,
           authorName,
+          authorUsername,
           timestamp,
           isSystem,
           replyToKey: null, // reply markup has no user id

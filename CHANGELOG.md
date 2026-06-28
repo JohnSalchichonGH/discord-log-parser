@@ -5,6 +5,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cross-format duplicates & split identities.** Merging the same channel in
+  multiple formats (e.g. a TXT alongside an HTML/JSON export) produced doubled
+  messages and the same person appearing twice — once under their nickname and
+  once under their username — because TXT exports carry no user id or message id.
+  Now: (1) usernames from HTML (`title`) and JSON (`author.name`) are aliased to
+  the id-backed identity, so an id-less TXT author resolves to the same person;
+  (2) a content signature (author + day + normalized text) collapses a TXT copy
+  of an id-bearing message while keeping messages unique to any file (so a
+  since-deleted message a TXT uniquely captured still survives); (3) every
+  message renders under one canonical identity name. Prefer JSON > HTML > TXT;
+  TXT remains best-effort since its clock is minute-resolution in an unknown
+  timezone.
+
 ### Added
 
 - **Insights dashboard** — a new analytics panel on the Preview step: summary

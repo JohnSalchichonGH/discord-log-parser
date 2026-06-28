@@ -47,47 +47,79 @@ export function getFilteredMessages(sortedFiles, opts) {
   const perFileMsgs = perFileRaw.map((rawList) =>
     rawList.map((r) => assembleMessage(r, uidOf)),
   );
+  // Canonicalize the display name to the identity's label, so a person who
+  // appears under different strings across formats (TXT username vs HTML/JSON
+  // nickname) shows under ONE consistent name everywhere downstream.
+  for (const msgs of perFileMsgs)
+    for (const m of msgs) m.authorName = userMap.get(m.authorId) || m.authorName;
 
   // Phase 2: deduplicate.
-  // HTML/JSON messages have stable snowflake ids -> exact dedup. TXT messages
-  // have none, so we key on timestamp|author|full-content. To avoid collapsing
-  // legitimately-repeated short messages (e.g. "ok" twice in the same minute,
-  // B5), we allow each keyless message up to the maximum number of times it
-  // appears in any single file (true cross-file overlap is still deduped).
-  const keylessKey = (m) =>
-    `ts:${m.timestamp.getTime()}|${m.authorName}|${m.contentParts.join('')}`;
+  //
+  // HTML/JSON messages have stable snowflake ids -> exact dedup by id.
+  //
+  // TXT messages have neither a message id nor a user id, and their clock is
+  // minute-resolution in an unknown timezone — so they can't be matched to their
+  // HTML/JSON twin by id or exact time. Instead a keyless message is identified
+  // by a content signature: resolved author id + UTC day + normalized text.
+  // (Author identity is unified across formats via username aliasing in
+  // buildUserMap, so the TXT and HTML/JSON copies share an author id.)
+  //
+  // Keeping the union without duplicates: an id-bearing message is authoritative.
+  // A keyless message is kept only to the extent its per-file count EXCEEDS what
+  // the id-bearing messages already cover for that signature — so a TXT copy of
+  // an HTML/JSON message is dropped, but a message only the TXT captured (e.g.
+  // since-deleted) still survives. Legit same-text repeats within a file are
+  // preserved by counting the max occurrences in any single file (B5).
+  const norm = (parts) =>
+    parts
+      .filter((p) => !p.startsWith('[') && !p.startsWith('> '))
+      .map((p) => p.replace(/\^\{[^}]*\}/g, ''))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  const sigOf = (m) =>
+    `${m.authorId}\t${m.timestamp.toISOString().slice(0, 10)}\t${norm(m.contentParts)}`;
 
-  const allowed = new Map(); // keyless key -> max per-file occurrence count
+  // Pass A: dedup id-bearing messages by snowflake id; tally their signatures.
+  const seenIds = new Set();
+  const keyedSig = new Map(); // signature -> count among kept id-bearing messages
+  const keyed = [];
+  for (const msgs of perFileMsgs)
+    for (const m of msgs) {
+      if (!m.messageId) continue;
+      const idk = `id:${m.messageId}`;
+      if (seenIds.has(idk)) continue;
+      seenIds.add(idk);
+      keyed.push(m);
+      const s = sigOf(m);
+      keyedSig.set(s, (keyedSig.get(s) || 0) + 1);
+    }
+
+  // Pass B: keyless cap per signature = max per-file occurrences (handles TXT/TXT
+  // overlap + legit repeats), minus what id-bearing messages already cover.
+  const allowed = new Map();
   for (const msgs of perFileMsgs) {
     const perFile = new Map();
     for (const m of msgs) {
       if (m.messageId) continue;
-      const k = keylessKey(m);
-      perFile.set(k, (perFile.get(k) || 0) + 1);
+      const s = sigOf(m);
+      perFile.set(s, (perFile.get(s) || 0) + 1);
     }
-    for (const [k, c] of perFile)
-      allowed.set(k, Math.max(allowed.get(k) || 0, c));
+    for (const [s, c] of perFile) allowed.set(s, Math.max(allowed.get(s) || 0, c));
   }
-
-  const seenIds = new Set();
-  const keptKeyless = new Map(); // keyless key -> running kept count
-  const allMessages = [];
-  for (const msgs of perFileMsgs) {
+  const keptKeyless = new Map();
+  const allMessages = [...keyed];
+  for (const msgs of perFileMsgs)
     for (const m of msgs) {
-      if (m.messageId) {
-        const idk = `id:${m.messageId}`;
-        if (seenIds.has(idk)) continue;
-        seenIds.add(idk);
-        allMessages.push(m);
-      } else {
-        const k = keylessKey(m);
-        const used = keptKeyless.get(k) || 0;
-        if (used >= (allowed.get(k) || 1)) continue;
-        keptKeyless.set(k, used + 1);
-        allMessages.push(m);
-      }
+      if (m.messageId) continue;
+      const s = sigOf(m);
+      const cap = Math.max(0, (allowed.get(s) || 0) - (keyedSig.get(s) || 0));
+      const used = keptKeyless.get(s) || 0;
+      if (used >= cap) continue;
+      keptKeyless.set(s, used + 1);
+      allMessages.push(m);
     }
-  }
   allMessages.sort((a, b) => a.timestamp - b.timestamp);
 
   // Phase 2.5: Apply pre-filters (date, bots, system, media-only, user whitelist)
