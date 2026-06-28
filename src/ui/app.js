@@ -19,6 +19,46 @@ import {
   enableAccurate,
   disableAccurate,
 } from '../core/token-config.js';
+import DlpWorker from '../worker.js?worker&inline';
+
+/* WEB WORKER (off-thread parse + pipeline; graceful main-thread fallback) */
+let worker = null;
+let workerBroken = false;
+function getWorker() {
+  if (workerBroken) return null;
+  if (!worker && typeof Worker !== 'undefined') {
+    try {
+      worker = new DlpWorker();
+    } catch {
+      workerBroken = true;
+    }
+  }
+  return worker;
+}
+// One request/response round-trip; progress messages go to onProgress.
+function workerRequest(w, message, onProgress) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      w.removeEventListener('message', onMsg);
+      w.removeEventListener('error', onErr);
+    };
+    const onMsg = (e) => {
+      const d = e.data;
+      if (d.type === 'progress') return onProgress && onProgress(d);
+      cleanup();
+      if (d.type === 'error') reject(new Error(d.message));
+      else resolve(d);
+    };
+    const onErr = (e) => {
+      cleanup();
+      reject(new Error(e.message || 'worker error'));
+    };
+    w.addEventListener('message', onMsg);
+    w.addEventListener('error', onErr);
+    w.postMessage(message);
+  });
+}
+const fileKey = (f) => `${f.name}|${f.size}`;
 
 /* CONSTANTS */
 const BAR_COLORS = [
@@ -439,17 +479,54 @@ function onAllFilesLoaded() {
     });
   });
 
-  // Populate user filter from the parse-once cached raw messages (B2), so the
-  // filter list and processing share a single parse per file.
-  const allNames = new Map(); // name → message count
-  for (const f of validFiles) {
-    for (const m of getRawMessages(f)) {
-      allNames.set(m.authorName, (allNames.get(m.authorName) || 0) + 1);
+  // Populate the user filter (author list). Parsing happens once — off-thread in
+  // the worker when available (B3b), else inline on the main thread (B2 cache).
+  populateUserFilter(validFiles);
+
+  dropZone.classList.add('has-files');
+  $('fileListContainer').style.display = 'block';
+  // Can only continue if at least one valid file loaded.
+  $('toStep2').disabled = validFiles.length === 0;
+}
+
+// Author name → message count, computed on the main thread from cached parses.
+function inlineAuthors(validFiles) {
+  const m = new Map();
+  for (const f of validFiles)
+    for (const msg of getRawMessages(f))
+      m.set(msg.authorName, (m.get(msg.authorName) || 0) + 1);
+  return [...m.entries()];
+}
+
+async function populateUserFilter(validFiles) {
+  let entries;
+  const w = getWorker();
+  if (w) {
+    try {
+      const res = await workerRequest(w, {
+        type: 'setFiles',
+        files: validFiles.map((f) => ({
+          key: fileKey(f),
+          content: f.content,
+          isTxt: f.isTxt,
+          isJson: f.isJson,
+        })),
+      });
+      entries = res.authors;
+    } catch {
+      workerBroken = true;
+      entries = inlineAuthors(validFiles);
     }
+  } else {
+    entries = inlineAuthors(validFiles);
   }
+  renderUserFilter(entries);
+}
+
+function renderUserFilter(entries) {
   const listUF = $('userFilterList');
   listUF.innerHTML = '';
-  [...allNames.entries()]
+  entries
     .sort((a, b) => b[1] - a[1])
     .forEach(([name, count]) => {
       const item = document.createElement('label');
@@ -481,11 +558,6 @@ function onAllFilesLoaded() {
       listUF.appendChild(item);
     });
   updateUserFilterCount();
-
-  dropZone.classList.add('has-files');
-  $('fileListContainer').style.display = 'block';
-  // Can only continue if at least one valid file loaded.
-  $('toStep2').disabled = validFiles.length === 0;
 }
 
 /* MANUAL GROUP MERGING */
@@ -533,145 +605,185 @@ function runProcessing() {
   fill.style.width = '10%';
 
   // Ensure the selected token counter (approx or accurate BPE) is loaded first.
-  ensureCounterReady().then(() => {
-    setTimeout(() => {
-      try {
-        const groups = buildGroups(loadedFiles.filter((f) => !f.invalid));
-        const maxTokens = Math.max(
-          1000,
-          parseInt($('maxTokens').value) || 1375000,
-        );
-        const maxChars = maxTokens * 4;
-        const doFilter = $('filterLowActivity').checked;
-        const minMsgs = doFilter
-          ? Math.max(1, parseInt($('minMessages').value) || 10)
-          : 0;
-        const userFilterCbs = [
-          ...$('userFilterList').querySelectorAll('input:checked'),
-        ].map((cb) => cb.value);
-        const userFilter =
-          userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
-        const dateFromVal = $('dateFrom').value
-          ? localDate($('dateFrom').value, false)
-          : null;
-        const dateToVal = $('dateTo').value
-          ? localDate($('dateTo').value, true)
-          : null;
-        const keywordsRaw = $('keywordInput').value.trim();
-        const keywords = keywordsRaw
-          ? keywordsRaw
-              .split('\n')
-              .map((l) => l.trim())
-              .filter(Boolean)
-          : [];
+  ensureCounterReady()
+    .then(async () => {
+      // Yield once so the "Processing…" status paints before any inline work.
+      await new Promise((r) => setTimeout(r, 20));
 
-        const opts = {
-          minMsgs,
-          maxTokens,
-          maxChars,
-          userFilter,
-          filterBots: $('filterBots').checked,
-          botSet: botUsers,
-          filterSystem: $('filterSystem').checked,
-          filterMediaOnly: $('filterMediaOnly').checked,
-          dateFrom: dateFromVal,
-          dateTo: dateToVal,
-          keywords,
-          useRealNames: $('useRealNames').checked,
-          countTokens,
-        };
+      const maxTokens = Math.max(
+        1000,
+        parseInt($('maxTokens').value) || 1375000,
+      );
+      const maxChars = maxTokens * 4;
+      const doFilter = $('filterLowActivity').checked;
+      const minMsgs = doFilter
+        ? Math.max(1, parseInt($('minMessages').value) || 10)
+        : 0;
+      const userFilterCbs = [
+        ...$('userFilterList').querySelectorAll('input:checked'),
+      ].map((cb) => cb.value);
+      const userFilter =
+        userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
+      const dateFromVal = $('dateFrom').value
+        ? localDate($('dateFrom').value, false)
+        : null;
+      const dateToVal = $('dateTo').value
+        ? localDate($('dateTo').value, true)
+        : null;
+      const keywordsRaw = $('keywordInput').value.trim();
+      const keywords = keywordsRaw
+        ? keywordsRaw
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+        : [];
 
-        fill.style.width = '40%';
+      // opts must be structured-cloneable (no functions) so it can post to the
+      // worker; the counter is injected separately on each side.
+      const opts = {
+        minMsgs,
+        maxTokens,
+        maxChars,
+        userFilter,
+        filterBots: $('filterBots').checked,
+        botSet: botUsers,
+        filterSystem: $('filterSystem').checked,
+        filterMediaOnly: $('filterMediaOnly').checked,
+        dateFrom: dateFromVal,
+        dateTo: dateToVal,
+        keywords,
+        useRealNames: $('useRealNames').checked,
+      };
 
-        processedOutputs = [];
-        let totalMessages = 0,
-          totalFiltered = 0,
-          totalKept = 0;
-        let allFinalChunks = [],
-          allUserMap = new Map();
+      fill.style.width = '40%';
 
-        for (const [, arr] of groups) {
-          const { finalChunks, userMap, allMessagesCount, filteredCount } =
-            processGroup(arr, opts);
-          totalMessages += allMessagesCount;
-          totalFiltered += filteredCount;
-          totalKept += finalChunks.length;
-          allFinalChunks = allFinalChunks.concat(finalChunks);
-          for (const [k, v] of userMap) allUserMap.set(k, v);
+      const validFiles = loadedFiles.filter((f) => !f.invalid);
+      const useAccurate = !!(
+        $('useAccurateTokens') && $('useAccurateTokens').checked
+      );
+      const { outputs, totalMessages, totalFiltered, totalKept, engine } =
+        await computeOutputs(validFiles, opts, useAccurate);
+      // Diagnostic: which path produced the result ('worker' or 'inline').
+      statusEl.dataset.engine = engine;
 
-          processedOutputs.push({
-            name: arr[0].baseName,
-            finalChunks,
-            userMap,
-            totalRaw: allMessagesCount,
-            filteredCount,
-          });
-        }
-
-        fill.style.width = '75%';
-
-        renderStats(
-          totalMessages,
-          totalFiltered,
-          totalKept,
-          allFinalChunks,
-          allUserMap,
-        );
-
-        if (processedOutputs.length > 0) {
-          const po = processedOutputs[0];
-          const renderOpts = {
-            preamble: $('customPreamble').value,
-            redactNames: $('redactNames').checked,
-            redactUrls: $('redactUrls').checked,
-            redactEmails: $('redactEmails').checked,
-          };
-          const previewText = renderTxt(
-            po.finalChunks,
-            po.userMap,
-            maxTokens,
-            renderOpts,
-          );
-          const lines = previewText.split('\n');
-          const maxPreviewLines = 300;
-          $('previewContent').textContent =
-            lines.length > maxPreviewLines
-              ? lines.slice(0, maxPreviewLines).join('\n') +
-                `\n\n… (${lines.length - maxPreviewLines} more lines)`
-              : previewText;
-          const chars = previewText.length;
-          const estTokens = countTokens(previewText);
-          const tokenLabel =
-            $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
-          $('previewInfo').textContent =
-            `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
-          $('previewCard').style.display = 'block';
-        }
-
-        fill.style.width = '100%';
-        setTimeout(() => {
-          progress.classList.remove('active');
-          fill.style.width = '0%';
-        }, 600);
-        if (totalMessages === 0) {
-          // E2: a silent empty result usually means the parser couldn't read the
-          // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
-          statusEl.textContent =
-            'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
-          statusEl.className = 'status-bar error';
-        } else {
-          statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
-          statusEl.className = 'status-bar success';
-        }
-        $('toStep4').disabled = false;
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Error: ' + err.message;
-        statusEl.className = 'status-bar error';
-        progress.classList.remove('active');
+      processedOutputs = outputs;
+      const allFinalChunks = [];
+      const allUserMap = new Map();
+      for (const po of outputs) {
+        for (const c of po.finalChunks) allFinalChunks.push(c);
+        for (const [k, v] of po.userMap) allUserMap.set(k, v);
       }
-    }, 80);
-  });
+
+      fill.style.width = '75%';
+
+      renderStats(
+        totalMessages,
+        totalFiltered,
+        totalKept,
+        allFinalChunks,
+        allUserMap,
+      );
+
+      if (processedOutputs.length > 0) {
+        const po = processedOutputs[0];
+        const renderOpts = {
+          preamble: $('customPreamble').value,
+          redactNames: $('redactNames').checked,
+          redactUrls: $('redactUrls').checked,
+          redactEmails: $('redactEmails').checked,
+        };
+        const previewText = renderTxt(
+          po.finalChunks,
+          po.userMap,
+          maxTokens,
+          renderOpts,
+        );
+        const lines = previewText.split('\n');
+        const maxPreviewLines = 300;
+        $('previewContent').textContent =
+          lines.length > maxPreviewLines
+            ? lines.slice(0, maxPreviewLines).join('\n') +
+              `\n\n… (${lines.length - maxPreviewLines} more lines)`
+            : previewText;
+        const chars = previewText.length;
+        const estTokens = countTokens(previewText);
+        const tokenLabel = useAccurate ? '' : '~';
+        $('previewInfo').textContent =
+          `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
+        $('previewCard').style.display = 'block';
+      }
+
+      fill.style.width = '100%';
+      setTimeout(() => {
+        progress.classList.remove('active');
+        fill.style.width = '0%';
+      }, 600);
+      if (totalMessages === 0) {
+        // E2: a silent empty result usually means the parser couldn't read the
+        // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
+        statusEl.textContent =
+          'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
+        statusEl.className = 'status-bar error';
+      } else {
+        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
+        statusEl.className = 'status-bar success';
+      }
+      $('toStep4').disabled = false;
+    })
+    .catch((err) => {
+      console.error(err);
+      statusEl.textContent = 'Error: ' + err.message;
+      statusEl.className = 'status-bar error';
+      progress.classList.remove('active');
+    });
+}
+
+// Run the parse + pipeline off-thread in the worker when possible (B3b), falling
+// back to the main thread. The accurate-token path always runs inline (the
+// worker is approx-only). Returns { outputs, totalMessages, totalFiltered,
+// totalKept } with outputs[].finalChunks (Date timestamps) + userMap (Map)
+// preserved by structured clone.
+async function computeOutputs(validFiles, opts, useAccurate) {
+  const w = !useAccurate ? getWorker() : null;
+  if (w) {
+    try {
+      const res = await workerRequest(w, {
+        type: 'process',
+        fileMeta: validFiles.map((f) => ({
+          key: fileKey(f),
+          channelId: f.channelId,
+          baseName: f.baseName,
+          sortOrder: f.sortOrder,
+          afterDate: f.afterDate,
+        })),
+        opts,
+      });
+      return { ...res, engine: 'worker' };
+    } catch {
+      workerBroken = true; // fall through to inline
+    }
+  }
+
+  const groups = buildGroups(validFiles);
+  const fullOpts = { ...opts, countTokens };
+  const outputs = [];
+  let totalMessages = 0,
+    totalFiltered = 0,
+    totalKept = 0;
+  for (const [, arr] of groups) {
+    const r = processGroup(arr, fullOpts);
+    totalMessages += r.allMessagesCount;
+    totalFiltered += r.filteredCount;
+    totalKept += r.finalChunks.length;
+    outputs.push({
+      name: arr[0].baseName,
+      finalChunks: r.finalChunks,
+      userMap: r.userMap,
+      totalRaw: r.allMessagesCount,
+      filteredCount: r.filteredCount,
+    });
+  }
+  return { outputs, totalMessages, totalFiltered, totalKept, engine: 'inline' };
 }
 
 function renderStats(totalRaw, totalFiltered, totalKept, chunks, _userMap) {

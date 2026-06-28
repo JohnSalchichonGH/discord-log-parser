@@ -8,7 +8,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 function injectCsp() {
   const csp = [
     "default-src 'none'",
-    "script-src 'unsafe-inline'",
+    // 'unsafe-inline' covers the inlined app script; blob: covers the inlined
+    // Web Worker (vite-plugin-singlefile emits it as a blob URL).
+    "script-src 'unsafe-inline' blob:",
+    'worker-src blob:',
     "style-src 'unsafe-inline'",
     'img-src data:',
     'font-src data:',

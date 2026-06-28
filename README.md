@@ -254,6 +254,7 @@ Layout:
 | `src/parsers/`                | HTML and TXT export parsers                                                    |
 | `src/render/`                 | TXT / JSON / Markdown / CSV renderers                                          |
 | `src/ui/`                     | markup styles + the DOM controller (`app.js`)                                  |
+| `src/worker.js`               | Web Worker: off-main-thread parse + pipeline (main-thread fallback)            |
 | `test/`                       | Vitest suites + synthetic DCE fixtures                                         |
 | `reference/legacy-index.html` | the original single-file build, frozen as a behavior oracle                    |
 
