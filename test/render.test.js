@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { renderJSON } from '../src/render/json.js';
 import { renderMarkdown } from '../src/render/markdown.js';
 import { renderCSV } from '../src/render/csv.js';
+import { renderHTML } from '../src/render/html.js';
 import {
   estimateTokens,
   estimateTokensFromChars,
@@ -89,6 +90,93 @@ describe('renderCSV', () => {
     const row = out.split('\n')[1];
     expect(row).toContain('"\'=HYPERLINK'); // content cell prefixed with '
     expect(row).toContain('"\'=cmd()"'); // author cell prefixed with '
+  });
+});
+
+describe('renderHTML', () => {
+  const html = renderHTML(chunks, userMap, 200000, {});
+
+  it('emits a complete standalone HTML document', () => {
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expect(html).toContain('<title>Chat Log</title>');
+    expect(html).toContain('<style>');
+    expect(html.trimEnd().endsWith('</html>')).toBe(true);
+  });
+
+  it('lists participants with names and message counts', () => {
+    expect(html).toContain('alice');
+    expect(html).toContain('bob');
+    expect(html).toMatch(/class="participants"/);
+  });
+
+  it('renders message content', () => {
+    expect(html).toContain('Hello world');
+    expect(html).toContain('hi alice');
+  });
+
+  it('resolves a reply uid to the referenced display name', () => {
+    expect(html).toContain('class="reply"');
+    expect(html).toMatch(/reply-who">bob</); // U2 -> bob
+    expect(html).toContain('earlier');
+  });
+
+  it('renders reactions as pills with counts', () => {
+    expect(html).toContain('class="react"');
+    expect(html).toContain('👍');
+    expect(html).toMatch(/class="rc">3</);
+  });
+
+  it('escapes untrusted content and author names (no raw HTML injection)', () => {
+    const evil = [
+      {
+        authorId: 'U9',
+        authorName: '<img src=x onerror=alert(1)>',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['<script>alert(1)</script>'],
+      },
+    ];
+    const out = renderHTML(evil, new Map([['U9', '<b>x</b>']]), 1000, {});
+    expect(out).not.toContain('<script>alert(1)</script>');
+    expect(out).not.toContain('<img src=x onerror');
+    expect(out).toContain('&lt;script&gt;');
+  });
+
+  it('turns media tokens into chips and linkifies URLs', () => {
+    const m = [
+      {
+        authorId: 'U1',
+        authorName: 'alice',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['see [IMG: cat.png] at http://example.com/x'],
+      },
+    ];
+    const out = renderHTML(m, userMap, 1000, {});
+    expect(out).toContain('<span class="chip">[IMG: cat.png]</span>');
+    expect(out).toContain('href="http://example.com/x"');
+  });
+
+  it('honors redactNames and redactUrls', () => {
+    const m = [
+      {
+        authorId: 'U1',
+        authorName: 'alice',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['ping http://secret.example.com'],
+      },
+    ];
+    const out = renderHTML(m, userMap, 1000, {
+      redactNames: true,
+      redactUrls: true,
+    });
+    expect(out).toContain('>U1<'); // author shown as the uid
+    expect(out).not.toContain('alice');
+    expect(out).toContain('[URL]');
+    expect(out).not.toContain('secret.example.com');
+  });
+
+  it('reports an empty conversation', () => {
+    const out = renderHTML([], new Map(), 1000, {});
+    expect(out).toContain('No messages found');
   });
 });
 

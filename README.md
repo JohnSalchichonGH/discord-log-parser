@@ -112,8 +112,10 @@ Quality runs **JSON > HTML > TXT** — prefer JSON when you have it.
 - **Filters** — date range, per-user whitelist, low-activity cutoff, and
   bot / system-notification / media-only exclusion.
 - **Redaction** — anonymize names, strip URLs, emails and phone numbers.
-- **Custom preamble**, and output as **TXT / JSON / Markdown / CSV** with optional
-  **chunking** (overlapping windows for multi-pass analysis).
+- **Custom preamble**, and output as **TXT / JSON / Markdown / CSV / HTML** with
+  optional **chunking** (overlapping windows for multi-pass analysis). The HTML
+  format is a self-contained, Discord-style transcript you can open and read in
+  any browser — avatars, reply quotes, media chips and reaction pills included.
 
 **Merging & identity**
 

@@ -28,6 +28,7 @@ import { renderTxt } from '../render/txt.js';
 import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
 import { renderCSV } from '../render/csv.js';
+import { renderHTML } from '../render/html.js';
 import {
   countTokens,
   hasAccurate,
@@ -1229,6 +1230,10 @@ $('downloadBtn').addEventListener('click', () => {
             text = renderCSV(chunkMsgs, po.userMap, renderOpts);
             ext = 'csv';
             break;
+          case 'html':
+            text = renderHTML(chunkMsgs, po.userMap, maxTokens, renderOpts);
+            ext = 'html';
+            break;
           default:
             text = renderTxt(chunkMsgs, po.userMap, maxTokens, renderOpts);
             ext = 'txt';
@@ -1260,6 +1265,10 @@ $('downloadBtn').addEventListener('click', () => {
         case 'csv':
           text = renderCSV(po.finalChunks, po.userMap, renderOpts);
           ext = 'csv';
+          break;
+        case 'html':
+          text = renderHTML(po.finalChunks, po.userMap, maxTokens, renderOpts);
+          ext = 'html';
           break;
         default:
           text = renderTxt(po.finalChunks, po.userMap, maxTokens, renderOpts);

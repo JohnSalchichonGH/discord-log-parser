@@ -5,6 +5,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **HTML export.** A new output format that renders the conversation as a
+  self-contained, human-readable transcript (open it in any browser, no external
+  requests): a participant legend, day dividers and session breaks, per-author
+  avatars/colors, reply quotes, media chips, reaction pills and linkified URLs.
+  Honors the same redaction options (names / URLs / emails+phones) as the other
+  formats; all untrusted content is HTML-escaped.
+
 ### Fixed
 
 - **Accurate token budget no longer under-fills.** The message-fill step is sized
