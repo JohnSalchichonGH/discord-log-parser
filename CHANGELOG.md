@@ -5,8 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-29
+
 ### Fixed
 
+- **CSV export hardened against spreadsheet formula injection.** Cells derived
+  from untrusted message content that begin with `=`, `+`, `-`, `@`, tab, or
+  carriage return are prefixed with an apostrophe so Excel/Sheets treat them as
+  text rather than evaluating them as formulas.
 - **Replies now show the right name, not a raw id or a stale nickname.** Three
   fixes: (1) every identity gets a display label, including ones that only ever
   appear as a reply _target_ (these previously rendered the raw uid like `U598`);
@@ -67,6 +73,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The project now ships an **MIT `LICENSE`**.
 - **Insights dashboard** — a new analytics panel on the Preview step: summary
   metrics, a brushable messages-over-time chart, a day×hour activity heatmap,
   an enhanced participant leaderboard (words / media / replies / active days),

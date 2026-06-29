@@ -174,3 +174,9 @@ npm run build:all   # both builds: lean + accurate-tokenizer
 CI runs lint, format check, tests with coverage (uploaded to Codecov), and both
 builds on every push. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the
 architecture, module layout, and build internals.
+
+---
+
+## License
+
+[MIT](LICENSE).

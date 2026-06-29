@@ -5,6 +5,16 @@
 
 import { redactString } from '../core/redact.js';
 
+// Quote a cell and neutralize spreadsheet formula injection: a cell that starts
+// with =, +, -, @, tab, or CR is evaluated as a formula by Excel/Sheets. Discord
+// message content is untrusted, so prefix such cells with an apostrophe to force
+// them to be treated as text.
+function csvCell(value) {
+  let s = String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 export function renderCSV(finalChunks, userMap, opts) {
   const rows = [
     ['timestamp', 'author_id', 'author_name', 'content', 'reactions'],
@@ -23,9 +33,5 @@ export function renderCSV(finalChunks, userMap, opts) {
       reactions,
     ]);
   }
-  return rows
-    .map((r) =>
-      r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','),
-    )
-    .join('\n');
+  return rows.map((r) => r.map(csvCell).join(',')).join('\n');
 }

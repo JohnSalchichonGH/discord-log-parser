@@ -75,6 +75,21 @@ describe('renderCSV', () => {
     expect(lines[1]).toContain('"> U2: earlier | Hello world"');
     expect(lines[1]).toContain('"^{👍:3}"');
   });
+
+  it('neutralizes spreadsheet formula injection in untrusted content', () => {
+    const evil = [
+      {
+        authorId: 'U1',
+        authorName: '=cmd()', // a malicious nickname
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['=HYPERLINK("http://evil","click")'],
+      },
+    ];
+    const out = renderCSV(evil, new Map(), {});
+    const row = out.split('\n')[1];
+    expect(row).toContain('"\'=HYPERLINK'); // content cell prefixed with '
+    expect(row).toContain('"\'=cmd()"'); // author cell prefixed with '
+  });
 });
 
 describe('tokens', () => {
