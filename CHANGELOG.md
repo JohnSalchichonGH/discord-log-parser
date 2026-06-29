@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Identity: stop merging different people; merge one person's alts; better
+  labels.** Previously "Use real names" keyed identities by display name, so two
+  different accounts sharing a nickname collapsed into one (and all "Deleted User"
+  accounts merged). Now identities are stable internal ids keyed by Discord user
+  ID; "Use real names" only changes the display token. On top of that: (1) one
+  person's deleted-and-recreated accounts are auto-merged when they share a
+  nickname, have similar usernames, and have non-overlapping activity (a remade
+  account), while different people who merely share a nickname stay separate and
+  get disambiguated (`kot`, `kot (2)`); (2) each identity is labeled with its most
+  recent **real** nickname, skipping `Deleted User`/`Unknown` placeholders so a
+  since-deleted user still shows their last real nick when an earlier export
+  captured it.
+
 - **Cross-format duplicates & split identities.** Merging the same channel in
   multiple formats (e.g. a TXT alongside an HTML/JSON export) produced doubled
   messages and the same person appearing twice — once under their nickname and

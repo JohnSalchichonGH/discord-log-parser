@@ -61,9 +61,20 @@ export legend, the statistics, and all the analytics.
   `author.name`) is registered as an alias of their identity. Since `.txt` writes
   people by username, a `.txt` line by `kang0420` resolves to the same identity as
   their id-backed nickname `k`.
-- Each identity is labeled with its **most recent nickname** (preferring id-backed
-  nicknames over id-less `.txt` names). This is order-independent, so renamed users
-  show their current name consistently regardless of file order.
+- **Remade-account merging.** One person who deletes and recreates their account
+  shows up as several IDs sharing a nickname. They're auto-merged when they share a
+  nickname **and** have similar usernames (Levenshtein) **and** non-overlapping
+  activity — the signature of an account remake (`cheezy_mcsqueezy0w0` → `…0_0` →
+  `…0.0`). Different people who merely share a nickname (different usernames,
+  overlapping activity) stay separate.
+- Each identity is labeled with its most recent **real** nickname — placeholders
+  (`Deleted User`, `Unknown`) are skipped when a real one exists, so a since-deleted
+  user still shows the last real nick any export captured. Labeling is
+  order-independent, and distinct people who still collide on a label are
+  disambiguated (`kot`, `kot (2)`).
+- Identity is a stable internal id; "Use real names" only changes the display
+  token (it re-keys by the now-unique label), so it can no longer merge two
+  different people who happen to share a name.
 
 **De-duplication.** HTML/JSON messages de-dupe by snowflake ID. `.txt` messages (no
 IDs, minute-resolution clock in an unknown timezone) can't be matched by ID or exact
