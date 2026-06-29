@@ -78,7 +78,9 @@ function workerRequest(w, message, onProgress) {
     w.postMessage({ ...message, _id: id });
   });
 }
-const fileKey = (f) => `${f.name}|${f.size}`;
+// lastModified disambiguates a re-export with the same name and byte size but
+// edited content, so the worker cache doesn't serve a stale parse.
+const fileKey = (f) => `${f.name}|${f.size}|${f.lastModified}`;
 
 /* CONSTANTS */
 const BAR_COLORS = [

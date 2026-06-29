@@ -36,3 +36,34 @@ export function fitToBudget(messages, maxChars, prioritySet, measure) {
   }
   return result;
 }
+
+// Add back excluded messages while the real measure still fits. The greedy fill
+// is sized by the fast char estimate, so when the real measure comes in *under*
+// it — e.g. accurate token counts on prose that runs more than 4 chars/token —
+// the budget is left under-filled and `fitToBudget` (which only ever drops)
+// can't recover it. `candidatesNewestFirst` are the excluded non-priority
+// messages ordered newest-first (those just outside the kept window). Adding
+// more of them only grows the rendered output, so the fit predicate is
+// monotonic in the count and we binary-search the largest prefix that fits —
+// O(log n) measures, cheaper than re-running the linear drop loop.
+export function topUpToBudget(kept, candidatesNewestFirst, maxChars, measure) {
+  if (candidatesNewestFirst.length === 0) return kept;
+  const byTime = (a, b) => a.timestamp - b.timestamp;
+  const fitsWithFirst = (k) =>
+    measure([...kept, ...candidatesNewestFirst.slice(0, k)].sort(byTime)) <=
+    maxChars;
+  // Fast path: everything fits.
+  if (fitsWithFirst(candidatesNewestFirst.length)) {
+    return [...kept, ...candidatesNewestFirst].sort(byTime);
+  }
+  // Largest k in [0, n] with fitsWithFirst(k); fitsWithFirst(0) holds because
+  // `kept` already fit when it was passed in.
+  let lo = 0;
+  let hi = candidatesNewestFirst.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fitsWithFirst(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return [...kept, ...candidatesNewestFirst.slice(0, lo)].sort(byTime);
+}

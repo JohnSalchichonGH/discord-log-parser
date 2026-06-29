@@ -5,6 +5,20 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Accurate token budget no longer under-fills.** The message-fill step is sized
+  by the fast 4-chars/token estimate; the verify pass then only ever _dropped_
+  messages, so when real tokenization came in under the estimate (typical for
+  prose that runs more than 4 chars/token) the accurate build silently left part
+  of the budget unused. A measured top-up now adds the newest excluded messages
+  back while the real token count still fits (binary-searched, so it's cheaper
+  than the existing drop loop and provably stays within budget).
+- **Worker parse cache keyed by content, not just name + size.** Re-uploading an
+  edited export whose name and byte size happened to match a previous file no
+  longer serves the stale cached parse; the cache key now includes the file's
+  `lastModified` timestamp.
+
 ## [1.1.0] - 2026-06-29
 
 ### Fixed

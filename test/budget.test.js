@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { messageCost, legendReserve, fitToBudget } from '../src/core/budget.js';
+import {
+  messageCost,
+  legendReserve,
+  fitToBudget,
+  topUpToBudget,
+} from '../src/core/budget.js';
 import { processGroup } from '../src/core/pipeline.js';
 import { renderTxt } from '../src/render/txt.js';
 
@@ -48,6 +53,41 @@ describe('fitToBudget', () => {
   });
 });
 
+describe('topUpToBudget', () => {
+  // 1 token per char of the single content part, deterministic.
+  const measure = (msgs) =>
+    msgs.reduce((s, m) => s + m.contentParts[0].length, 0);
+  const mk = (t, text) => ({ timestamp: t, contentParts: [text] });
+
+  it('adds back the newest excluded messages until the budget is full', () => {
+    const kept = [mk(30, '0123456789')]; // 10, newest
+    // Excluded older messages, newest-first as the pipeline passes them.
+    const leftover = [mk(20, '0123456789'), mk(10, '0123456789')]; // 10 each
+    const out = topUpToBudget(kept, leftover, 25, measure);
+    expect(measure(out)).toBeLessThanOrEqual(25);
+    // 10 (kept) + 10 (t=20) = 20 fits; adding t=10 would hit 30 > 25.
+    expect(out.map((m) => m.timestamp)).toEqual([20, 30]);
+  });
+
+  it('keeps the result sorted by timestamp', () => {
+    const kept = [mk(30, 'aa'), mk(40, 'bb')];
+    const leftover = [mk(20, 'cc'), mk(10, 'dd')];
+    const out = topUpToBudget(kept, leftover, 1000, measure);
+    expect(out.map((m) => m.timestamp)).toEqual([10, 20, 30, 40]);
+  });
+
+  it('is a no-op when there is no headroom', () => {
+    const kept = [mk(30, '0123456789')]; // 10
+    const out = topUpToBudget(kept, [mk(20, '0123456789')], 10, measure);
+    expect(out).toEqual(kept);
+  });
+
+  it('returns kept unchanged when there are no candidates', () => {
+    const kept = [mk(1, 'x')];
+    expect(topUpToBudget(kept, [], 100, measure)).toBe(kept);
+  });
+});
+
 describe('A7: rendered output stays within the budget', () => {
   const sampleJson = readFileSync(
     resolve(process.cwd(), 'test/fixtures/sample.json'),
@@ -82,6 +122,47 @@ describe('A7: rendered output stays within the budget', () => {
     const files = [{ isJson: true, content: sampleJson }];
     const { finalChunks } = processGroup(files, opts(1_000_000));
     expect(finalChunks).toHaveLength(5);
+  });
+
+  it('tops up an accurate token budget the char estimate under-filled (A7b)', () => {
+    // 20 messages; the greedy fill is sized by the 4-chars/token estimate, but
+    // here each message tokenizes far cheaper than that, so without a top-up
+    // pass most of the budget would go unused.
+    const messages = Array.from({ length: 20 }, (_, i) => ({
+      id: String(1000 + i),
+      type: 'Default',
+      timestamp: `2025-07-12T03:${String(i).padStart(2, '0')}:00+00:00`,
+      content: `message number ${i}`,
+      author: {
+        id: '111',
+        name: 'alice',
+        discriminator: '0001',
+        nickname: 'alice',
+        isBot: false,
+      },
+      attachments: [],
+      embeds: [],
+      stickers: [],
+      reactions: [],
+    }));
+    const content = JSON.stringify({ messages });
+    const files = [{ isJson: true, content }];
+    const countTokens = (t) => Math.ceil(t.length / 8); // ~8 chars/token (under 4cpt)
+    const maxTokens = 200;
+    const maxChars = maxTokens * 4; // what an accurate run reserves on the char side
+
+    const { finalChunks, userMap } = processGroup(files, {
+      ...opts(maxChars),
+      countTokens,
+      maxTokens,
+    });
+    const used = countTokens(renderTxt(finalChunks, userMap, maxTokens, {}));
+    // Provably fits the token budget...
+    expect(used).toBeLessThanOrEqual(maxTokens);
+    // ...and all 20 are kept. The char-greedy fill alone can't do this: the 20
+    // messages cost ~920 chars (> maxChars 800), so it stops a few short; only
+    // the token-measured top-up recovers the rest.
+    expect(finalChunks).toHaveLength(20);
   });
 
   it('fits an accurate token budget when a counter is supplied (B4)', () => {
