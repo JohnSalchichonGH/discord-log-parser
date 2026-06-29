@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-29
+
 ### Added
 
 - **HTML export.** A new output format that renders the conversation as a

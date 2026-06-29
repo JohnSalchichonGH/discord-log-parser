@@ -153,7 +153,7 @@ display.
 - The default build uses a `1 token ≈ 4 chars` estimate. For exact counts, use
   `dist/index-accurate.html` (real GPT `cl100k_base` BPE tokenizer, opt-in toggle).
 - Token-budget trimming is calibrated for the Compact TXT output; the JSON/Markdown/
-  CSV formats and chunk sizes may run larger than the selected budget.
+  CSV/HTML formats and chunk sizes may run larger than the selected budget.
 - Media appears in the explorer as labeled chips, not thumbnails (exports are text,
   so there's no image data).
 
@@ -167,7 +167,7 @@ preserved. All parsing/processing/analytics/rendering logic lives in tested modu
 `src/ui/*.js` is the DOM/visualization layer.
 
 ```bash
-npm test            # Vitest suite (130 tests)
+npm test            # Vitest suite (154 tests)
 npm run coverage    # tests + V8 coverage (lcov/html)
 npm run lint        # ESLint   ·   npm run format  (Prettier)
 npm run build:all   # both builds: lean + accurate-tokenizer
