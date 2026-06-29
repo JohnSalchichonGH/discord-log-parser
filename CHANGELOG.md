@@ -7,6 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Replies no longer show a raw `U###` id instead of a name.** A person who only
+  ever appeared as a _reply target_ (never as a message author in the loaded set)
+  got an internal id but no display label, so reply quotes rendered the raw uid.
+  Every identity now gets a label; and when a reply target is folded into another
+  identity by the message-content bridge, its reply tokens are re-pointed so the
+  quote shows the canonical name.
 - **Identity: link the same person across formats by their messages.** When a
   user was renamed between exports — e.g. an older TXT shows an old nick that no
   id-bearing (HTML/JSON) export ever recorded — name/username aliasing couldn't

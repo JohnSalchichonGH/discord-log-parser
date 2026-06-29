@@ -143,6 +143,27 @@ describe('buildUserMap stable identity (#4)', () => {
     expect(new Set(userMap.values())).toEqual(new Set(['kot', 'kot (2)'])); // disambiguated
   });
 
+  it('labels a reply-only identity so reply tokens resolve to a name, not a raw uid', () => {
+    const msgs = [
+      raw({
+        authorKey: '1',
+        authorName: 'alice',
+        timestamp: new Date('2026-01-01T00:00:00Z'),
+      }),
+      // "bob" only ever appears as a reply target, never as a message author.
+      raw({
+        authorKey: '1',
+        authorName: 'alice',
+        replyToKey: '2',
+        replyToName: 'bob',
+        replySnippet: 'hi',
+        timestamp: new Date('2026-01-02T00:00:00Z'),
+      }),
+    ];
+    const { userMap, uidOf } = buildUserMap([msgs]);
+    expect(userMap.get(uidOf('2', 'bob'))).toBe('bob'); // labeled, not "U2"
+  });
+
   it('labels a deleted user by their last real nick when an earlier export had it', () => {
     const msgs = [
       raw({

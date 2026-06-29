@@ -221,6 +221,14 @@ export function buildUserMap(perFileRaw, useRealNames) {
     });
   }
 
+  // Ensure every identity that can appear in a reply token — including reply-only
+  // ones that never authored a message — has a label, so the viewer and export
+  // never fall back to a raw uid like "U598".
+  const nameByUid = new Map();
+  for (const [nm, u] of nameToUid) if (!nameByUid.has(u)) nameByUid.set(u, nm);
+  for (const u of new Set([...idToUid.values(), ...nameToUid.values()]))
+    if (!label.has(u)) label.set(u, nameByUid.get(u) || u);
+
   const uidOf = (key, name) => resolve(key, name) || name || '';
 
   // "Use real names" mode: the export uses the real name as each author's token,
