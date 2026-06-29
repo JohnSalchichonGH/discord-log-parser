@@ -60,7 +60,8 @@ export function getFilteredMessages(sortedFiles, opts, identity) {
   // appears under different strings across formats (TXT username vs HTML/JSON
   // nickname) shows under ONE consistent name everywhere downstream.
   for (const msgs of perFileMsgs)
-    for (const m of msgs) m.authorName = userMap.get(m.authorId) || m.authorName;
+    for (const m of msgs)
+      m.authorName = userMap.get(m.authorId) || m.authorName;
 
   // Phase 2: deduplicate.
   //
@@ -115,7 +116,8 @@ export function getFilteredMessages(sortedFiles, opts, identity) {
       const s = sigOf(m);
       perFile.set(s, (perFile.get(s) || 0) + 1);
     }
-    for (const [s, c] of perFile) allowed.set(s, Math.max(allowed.get(s) || 0, c));
+    for (const [s, c] of perFile)
+      allowed.set(s, Math.max(allowed.get(s) || 0, c));
   }
   const keptKeyless = new Map();
   const allMessages = [...keyed];

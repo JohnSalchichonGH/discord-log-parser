@@ -61,7 +61,8 @@ function dayKeyOf(ms, tz) {
 }
 const topEntry = (mp) => {
   let best = null;
-  for (const [name, count] of mp) if (!best || count > best.count) best = { name, count };
+  for (const [name, count] of mp)
+    if (!best || count > best.count) best = { name, count };
   return best;
 };
 
@@ -99,7 +100,8 @@ export function computeWrapped(messages, stats, tz) {
       lateBy.set(m.authorName, (lateBy.get(m.authorName) || 0) + 1);
     const dk = dayKeyOf(m.ts, tz);
     const cur = firstOfDay.get(dk);
-    if (!cur || m.ts < cur.ts) firstOfDay.set(dk, { ts: m.ts, author: m.authorName });
+    if (!cur || m.ts < cur.ts)
+      firstOfDay.set(dk, { ts: m.ts, author: m.authorName });
   }
   const starterBy = new Map();
   for (const { author } of firstOfDay.values())
@@ -130,7 +132,12 @@ export function computeWrapped(messages, stats, tz) {
       };
     const text = plainText(m.parts);
     if (text && (!longest || text.length > longest.len))
-      longest = { len: text.length, name: m.authorName, text: snippet(text), ts: m.ts };
+      longest = {
+        len: text.length,
+        name: m.authorName,
+        text: snippet(text),
+        ts: m.ts,
+      };
   }
 
   const topPairEdge = stats.replyEdges
