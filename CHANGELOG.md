@@ -12,7 +12,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   requests): a participant legend, day dividers and session breaks, per-author
   avatars/colors, reply quotes, media chips, reaction pills and linkified URLs.
   Honors the same redaction options (names / URLs / emails+phones) as the other
-  formats; all untrusted content is HTML-escaped.
+  formats; all untrusted content is HTML-escaped. Large transcripts
+  (> 2,000 messages) opt into CSS `content-visibility` so the browser skips
+  layout/paint of off-screen rows — smooth scrolling at tens of thousands of
+  messages while every row stays in the DOM, so native Ctrl-F and printing keep
+  working and no JavaScript is added.
 
 ### Fixed
 

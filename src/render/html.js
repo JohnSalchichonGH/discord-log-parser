@@ -123,6 +123,26 @@ function renderReply(reply, userMap, opts) {
   );
 }
 
+// Above this many messages the document opts into CSS `content-visibility`, so
+// the browser skips layout/paint of off-screen rows (bounded render cost, smooth
+// scroll) while every row stays in the DOM — native Ctrl-F and printing keep
+// working and no JavaScript is added. Small logs are emitted byte-for-byte as
+// before. See renderHTML.
+const VIRTUALIZE_THRESHOLD = 2000;
+
+// Rough rendered pixel height of a message row, used as the per-row
+// `contain-intrinsic-size` placeholder so the scrollbar is about right before a
+// row is scrolled into view (the browser replaces it with the real height on
+// render). Deliberately approximate — long wrapped lines self-correct.
+function estimateHeight(grouped, contentLines, reply, reactions) {
+  let h = 8; // vertical padding
+  if (!grouped) h += 22; // author/time header
+  h += Math.max(1, contentLines.length) * 22; // content lines
+  if (reply) h += 22;
+  if (reactions.length) h += 28;
+  return Math.max(grouped ? 24 : 44, h); // at least one avatar's worth
+}
+
 const STYLE = `
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -160,11 +180,18 @@ h1{font-size:20px;margin:0 0 4px}
 .empty{color:#949ba4;padding:32px 0;text-align:center}
 `;
 
+// Appended only for large logs: virtualize off-screen rows. `--h` is the
+// per-row estimate set inline on each .msg.
+const VIRTUAL_STYLE = `
+body.virt .msg{content-visibility:auto;contain-intrinsic-size:0 var(--h,46px)}
+`;
+
 export function renderHTML(finalChunks, userMap, maxTokens, opts = {}) {
   const stats = {};
   for (const c of finalChunks) stats[c.authorId] = (stats[c.authorId] || 0) + 1;
   const total = finalChunks.length;
   const nameOf = (uid) => (opts.redactNames ? uid : userMap.get(uid) || uid);
+  const virtualize = total > VIRTUALIZE_THRESHOLD;
 
   const head = [];
   head.push('<!doctype html>');
@@ -173,8 +200,10 @@ export function renderHTML(finalChunks, userMap, maxTokens, opts = {}) {
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
   );
   head.push('<title>Chat Log</title>');
-  head.push(`<style>${STYLE}</style>`);
-  head.push('</head><body><div class="wrap">');
+  head.push(`<style>${STYLE}${virtualize ? VIRTUAL_STYLE : ''}</style>`);
+  head.push(
+    `</head><body${virtualize ? ' class="virt"' : ''}><div class="wrap">`,
+  );
 
   const body = [];
   body.push('<header>');
@@ -254,8 +283,11 @@ export function renderHTML(finalChunks, userMap, maxTokens, opts = {}) {
       const avatar = grouped
         ? '<div class="avatar blank"></div>'
         : `<div class="avatar" style="background:${color}">${initials(nm)}</div>`;
+      const est = virtualize
+        ? ` style="--h:${estimateHeight(grouped, contentLines, reply, reactions)}px"`
+        : '';
       body.push(
-        `<div class="msg${grouped ? ' cont' : ''}">${avatar}` +
+        `<div class="msg${grouped ? ' cont' : ''}"${est}>${avatar}` +
           `<div class="body">${inner.filter(Boolean).join('')}</div></div>`,
       );
 

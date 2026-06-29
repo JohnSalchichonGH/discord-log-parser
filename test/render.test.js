@@ -178,6 +178,25 @@ describe('renderHTML', () => {
     const out = renderHTML([], new Map(), 1000, {});
     expect(out).toContain('No messages found');
   });
+
+  it('leaves small logs un-virtualized (byte-for-byte as before)', () => {
+    expect(html).not.toContain('class="virt"');
+    expect(html).not.toContain('content-visibility');
+    expect(html).not.toContain('--h:');
+  });
+
+  it('virtualizes large logs with content-visibility and per-row estimates', () => {
+    const many = Array.from({ length: 2001 }, (_, i) => ({
+      authorId: 'U1',
+      authorName: 'alice',
+      timestamp: new Date(2025, 0, 1, 0, 0, i),
+      contentParts: [`msg ${i}`],
+    }));
+    const out = renderHTML(many, userMap, 200000, {});
+    expect(out).toContain('<body class="virt">');
+    expect(out).toContain('content-visibility:auto');
+    expect(out).toMatch(/class="msg[^"]*" style="--h:\d+px"/);
+  });
 });
 
 describe('tokens', () => {
