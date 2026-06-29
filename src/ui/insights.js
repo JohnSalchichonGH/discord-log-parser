@@ -196,7 +196,9 @@ function layout(nodes, edges, w, h, iters) {
       pos[i].vx *= 0.86;
       pos[i].vy *= 0.86;
       pos[i].x = Math.max(24, Math.min(w - 24, pos[i].x));
-      pos[i].y = Math.max(20, Math.min(h - 24, pos[i].y));
+      // Leave room below the lowest node for its name label (drawn at
+      // y + radius + 12) so bottom-row labels don't clip past the viewBox.
+      pos[i].y = Math.max(20, Math.min(h - 42, pos[i].y));
     }
   }
   return pos;
