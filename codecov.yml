@@ -1,0 +1,29 @@
+# Codecov configuration — https://docs.codecov.com/docs/codecovyml-reference
+coverage:
+  status:
+    project:
+      default:
+        target: auto # compare against the base commit
+        threshold: 1% # tolerate a 1% drop before the check fails
+    patch:
+      default:
+        target: 70% # new/changed lines should be reasonably covered
+        threshold: 10%
+        informational: true # report on PRs, but never block a merge
+
+# Post a single coverage summary comment on pull requests.
+comment:
+  layout: 'reach, diff, flags, files'
+  require_changes: false
+
+# Keep the report focused on testable source (mirrors vitest's coverage excludes
+# and drops generated/tooling paths). lcov only contains src/ files, so the rest
+# are defensive/no-ops that document intent.
+ignore:
+  - 'dist/**'
+  - 'scripts/**'
+  - 'reference/**'
+  - 'test/**'
+  - '**/*.config.js'
+  - 'src/worker.js'
+  - 'src/core/tokenizer-bpe.js'
