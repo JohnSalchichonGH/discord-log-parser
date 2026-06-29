@@ -193,6 +193,80 @@ describe('cross-format dedup (TXT copy of an id-bearing message)', () => {
   });
 });
 
+describe('message-content identity bridge (renamed across exports)', () => {
+  // Same person, different periods: a JSON export shows them as
+  // "encyclopediagalactica" (id 7); an older TXT shows the SAME messages under an
+  // old nick "eralnkj" that no id-bearing export ever recorded. Linking by name
+  // is impossible, but the messages match, so they should collapse to one person.
+  const lines = [
+    'cranberry goat cheese is underrated honestly',
+    'you rats are supposed to eat anything',
+    'i had a cranberry goat cheese phase for a while',
+    'seriously you have to try it',
+    'my top cheese is gruyere then pecorino',
+    'rate me fellow human being',
+    'this server is something else lol',
+    'anyway good night everyone',
+    'seriously try the goat cheese',
+    'i mean it this time',
+  ];
+  const json = JSON.stringify({
+    guild: { id: '9', name: 'G' },
+    channel: { id: '1', name: 'c' },
+    dateRange: { after: null },
+    messages: lines.map((c, i) => ({
+      id: String(900 + i),
+      type: 'Default',
+      timestamp: `2026-04-${10 + i}T12:00:00Z`,
+      content: c,
+      author: {
+        id: '7',
+        name: 'encyclopediagalactica',
+        nickname: 'encyclopediagalactica',
+      },
+    })),
+    messageCount: lines.length,
+  });
+  const txt =
+    'Guild: G\nChannel: c\n\n' +
+    lines
+      .map((c, i) => `[4/${10 + i}/2026 12:00 PM] eralnkj\n${c}\n`)
+      .join('\n');
+
+  it('folds the TXT author into the id-bearing identity and drops the duplicates', () => {
+    const files = [
+      { isJson: true, content: json },
+      { isTxt: true, content: txt },
+    ];
+    const { filtered, userMap } = getFilteredMessages(files, baseOpts());
+    expect(filtered).toHaveLength(lines.length); // duplicates collapsed, not doubled
+    const ids = new Set(filtered.map((m) => m.authorId));
+    expect(ids.size).toBe(1); // one identity
+    expect(userMap.get([...ids][0])).toBe('encyclopediagalactica');
+    expect([...new Set(filtered.map((m) => m.authorName))]).toEqual([
+      'encyclopediagalactica',
+    ]);
+  });
+
+  it('does NOT bridge a TXT author whose messages do not match an identity', () => {
+    const otherTxt =
+      'Guild: G\nChannel: c\n\n' +
+      Array.from(
+        { length: 10 },
+        (_, i) =>
+          `[4/${10 + i}/2026 1:00 PM] strangerguy\nunrelated message number ${i}\n`,
+      ).join('\n');
+    const files = [
+      { isJson: true, content: json },
+      { isTxt: true, content: otherTxt },
+    ];
+    const { filtered } = getFilteredMessages(files, baseOpts());
+    // 10 JSON + 10 unrelated TXT, kept separate
+    expect(filtered).toHaveLength(20);
+    expect(new Set(filtered.map((m) => m.authorName)).size).toBe(2);
+  });
+});
+
 describe('parse-once memoization (B2)', () => {
   it('parses each file only once and reuses the cache across reprocessing', () => {
     const f = { isJson: true, content: sampleJson };

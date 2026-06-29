@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Identity: link the same person across formats by their messages.** When a
+  user was renamed between exports — e.g. an older TXT shows an old nick that no
+  id-bearing (HTML/JSON) export ever recorded — name/username aliasing couldn't
+  connect them, so the _same_ messages survived under two identities (duplicated
+  in the viewer, split in the stats). A new message-content bridge links a
+  keyless TXT author to an id-bearing identity when their messages match (same
+  normalized text + day), folding them together and collapsing the duplicates.
+  A strong-evidence guard (≥ 8 matching messages **and** a majority of that
+  author's text messages) prevents coincidental short-message collisions from
+  merging unrelated people. Only runs when TXT is mixed with an id-bearing
+  format. (Verified on a real merge: caught ~500 extra cross-format duplicates
+  with no false merges.)
+
 - **Identity: stop merging different people; merge one person's alts; better
   labels.** Previously "Use real names" keyed identities by display name, so two
   different accounts sharing a nickname collapsed into one (and all "Deleted User"

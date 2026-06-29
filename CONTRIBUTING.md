@@ -76,6 +76,14 @@ export legend, the statistics, and all the analytics.
   token (it re-keys by the now-unique label), so it can no longer merge two
   different people who happen to share a name.
 
+**Message-content bridge.** A user renamed between exports can appear under a
+nick that no id-bearing export recorded (e.g. an old TXT nick), which name/
+username aliasing can't link — so the same messages split into two identities. A
+keyless (TXT) author whose messages overwhelmingly match one id-bearing identity
+(same normalized text + UTC day) is folded into it. The guard (≥ 8 matches and a
+majority of that author's text messages) makes coincidental collisions
+impossible to act on; it only runs when TXT is mixed with an id-bearing format.
+
 **De-duplication.** HTML/JSON messages de-dupe by snowflake ID. `.txt` messages (no
 IDs, minute-resolution clock in an unknown timezone) can't be matched by ID or exact
 time, so they're identified by a **content signature** — resolved author + UTC day +
