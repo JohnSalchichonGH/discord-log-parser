@@ -267,6 +267,51 @@ describe('message-content identity bridge (renamed across exports)', () => {
   });
 });
 
+describe('reply resolves to the referenced message’s author (HTML)', () => {
+  // The person posts the referenced message as "Light" (id 7) in a JSON export.
+  // A later HTML export's reply shows the old nick "favian" in the reply-author,
+  // but its reply-link carries the referenced message id — so the reply should
+  // resolve to "Light", not the stale "favian".
+  const json = JSON.stringify({
+    guild: { id: '9', name: 'G' },
+    channel: { id: '1', name: 'c' },
+    dateRange: { after: null },
+    messages: [
+      {
+        id: '1439489076142145577',
+        type: 'Default',
+        timestamp: '2025-11-16T08:00:00Z',
+        content: 'my favorite cheese is cranberry goat cheese',
+        author: { id: '7', name: 'grokipedia', nickname: 'Light' },
+      },
+    ],
+    messageCount: 1,
+  });
+  const html =
+    '<html><body><div class="chatlog__message-group">' +
+    '<div class="chatlog__message-container" data-message-id="1439490337109446667">' +
+    '<div class="chatlog__message"><div class="chatlog__message-primary">' +
+    '<div class="chatlog__reply"><div class="chatlog__reply-author" title="grokipedia">favian</div>' +
+    '<div class="chatlog__reply-content"><span class="chatlog__reply-link" ' +
+    'onclick="scrollToMessage(event,\'1439489076142145577\')">cheese</span></div></div>' +
+    '<div class="chatlog__header"><span class="chatlog__author" title="cheezy" data-user-id="8">Cheezy</span></div>' +
+    '<div class="chatlog__content chatlog__markdown"><span class="chatlog__markdown-preserve">yo</span></div>' +
+    '</div></div></div></div></body></html>';
+
+  it('re-points the reply token to the referenced message’s canonical author', () => {
+    const files = [
+      { isJson: true, content: json },
+      { isTxt: false, content: html },
+    ];
+    const { filtered, userMap } = getFilteredMessages(files, baseOpts());
+    const reply = filtered.find((m) => m.contentParts[0]?.startsWith('> '));
+    expect(reply).toBeTruthy();
+    const tok = reply.contentParts[0];
+    const uid = tok.slice(2, tok.indexOf(':')).trim();
+    expect(userMap.get(uid)).toBe('Light'); // not the stale "favian"
+  });
+});
+
 describe('parse-once memoization (B2)', () => {
   it('parses each file only once and reuses the cache across reprocessing', () => {
     const f = { isJson: true, content: sampleJson };

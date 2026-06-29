@@ -83,12 +83,20 @@ export function parseMessages(htmlString) {
 
       // Reply
       let replyToName = null,
-        replySnippet = null;
+        replySnippet = null,
+        replyToMessageId = null;
       const replyDiv = selectOne('.chatlog__reply', container);
       if (replyDiv) {
         const rAuthor = selectOne('.chatlog__reply-author', replyDiv);
         if (rAuthor) {
           replyToName = text(rAuthor);
+          // The reply link carries the referenced message's snowflake in its
+          // onclick (`scrollToMessage(event,'<id>')`) — the exact target, more
+          // reliable than the displayed nickname (which may be an old name).
+          const rLink = selectOne('.chatlog__reply-link', replyDiv);
+          const onclick = rLink ? attr(rLink, 'onclick') || '' : '';
+          const idm = onclick.match(/(\d{17,21})/);
+          if (idm) replyToMessageId = idm[1];
           const rConDiv = selectOne('.chatlog__reply-content', replyDiv);
           replySnippet = '…';
           if (rConDiv) {
@@ -166,6 +174,7 @@ export function parseMessages(htmlString) {
           timestamp,
           isSystem,
           replyToKey: null, // reply markup has no user id
+          replyToMessageId,
           replyToName,
           replySnippet,
           parts,

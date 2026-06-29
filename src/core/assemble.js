@@ -270,5 +270,6 @@ export function assembleMessage(raw, uidOf) {
     timestamp: raw.timestamp,
     contentParts,
     isSystem: raw.isSystem,
+    replyToMessageId: raw.replyToMessageId || null,
   };
 }

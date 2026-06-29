@@ -7,12 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **Replies no longer show a raw `U###` id instead of a name.** A person who only
-  ever appeared as a _reply target_ (never as a message author in the loaded set)
-  got an internal id but no display label, so reply quotes rendered the raw uid.
-  Every identity now gets a label; and when a reply target is folded into another
-  identity by the message-content bridge, its reply tokens are re-pointed so the
-  quote shows the canonical name.
+- **Replies now show the right name, not a raw id or a stale nickname.** Three
+  fixes: (1) every identity gets a display label, including ones that only ever
+  appear as a reply _target_ (these previously rendered the raw uid like `U598`);
+  (2) HTML replies are resolved by the **referenced message's snowflake id** (read
+  from the reply link's `scrollToMessage` handler) to that message's canonical
+  author — so a reply shows the same name as the message it replies to, even when
+  the HTML labeled the target with an older nickname; (3) when a reply target is
+  folded into another identity by the message-content bridge, its reply tokens are
+  re-pointed too. (On a real HTML+JSON merge, 16,485 of 16,486 reply tokens now
+  resolve to a name.)
 - **Identity: link the same person across formats by their messages.** When a
   user was renamed between exports — e.g. an older TXT shows an old nick that no
   id-bearing (HTML/JSON) export ever recorded — name/username aliasing couldn't

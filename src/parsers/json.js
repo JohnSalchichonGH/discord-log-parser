@@ -89,6 +89,8 @@ export function parseMessages(content) {
     let replyToKey = null,
       replyToName = null,
       replySnippet = null;
+    const replyToMessageId =
+      m.type === 'Reply' ? m.reference?.messageId || null : null;
 
     if (m.type === 'Reply' && m.reference?.messageId) {
       const ref = byId.get(m.reference.messageId);
@@ -141,6 +143,7 @@ export function parseMessages(content) {
         timestamp,
         isSystem,
         replyToKey,
+        replyToMessageId,
         replyToName,
         replySnippet,
         parts,
