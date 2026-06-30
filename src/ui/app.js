@@ -41,7 +41,7 @@ import {
   fileKey,
   markWorkerBroken,
 } from './worker-client.js';
-import { theme } from './store.js';
+import { theme, parseSummary } from './store.js';
 import { effect } from '@preact/signals';
 
 /* CONSTANTS */
@@ -379,6 +379,7 @@ function removeFile(idx) {
     dropZone.classList.remove('has-files');
     $('fileListContainer').style.display = 'none';
     $('toStep2').disabled = true;
+    parseSummary.value = null;
     renderDropZoneEmpty();
   } else {
     onAllFilesLoaded();
@@ -552,6 +553,18 @@ function renderUserFilter(entries) {
       listUF.appendChild(item);
     });
   updateUserFilterCount();
+
+  // Feed the Preact parse-summary card (counts are raw, pre-dedup; the Review
+  // step shows deduplicated totals).
+  const valid = loadedFiles.filter((f) => !f.invalid);
+  parseSummary.value = valid.length
+    ? {
+        messages: entries.reduce((sum, [, c]) => sum + c, 0),
+        participants: entries.length,
+        files: valid.length,
+        channels: buildGroups(valid).size,
+      }
+    : null;
 }
 
 /* MANUAL GROUP MERGING */

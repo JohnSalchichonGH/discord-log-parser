@@ -3,6 +3,10 @@
 
 import { render } from 'preact';
 import { Header } from './views/Header.jsx';
+import { ParseSummary } from './views/ParseSummary.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
+
+const summaryHost = document.getElementById('parse-summary');
+if (summaryHost) render(<ParseSummary />, summaryHost);

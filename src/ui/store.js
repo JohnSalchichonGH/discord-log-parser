@@ -7,6 +7,13 @@
 
 import { signal, effect } from '@preact/signals';
 
+/* PARSE SUMMARY — what the upload step found, so the user gets immediate "it
+   understood my files" confidence. Null when no files are loaded. Shape:
+   { messages, participants, files, channels }. Counts are raw (pre-dedup);
+   the deduplicated totals surface later in the Review step. Set by app.js once
+   the worker has parsed the uploads. */
+export const parseSummary = signal(null);
+
 /* THEME — persisted to localStorage; the effect keeps <html data-theme> and
    storage in sync whenever the signal changes. */
 function readTheme() {

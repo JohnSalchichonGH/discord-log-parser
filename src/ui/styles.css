@@ -1111,6 +1111,35 @@ textarea:focus-visible,
   flex: 1;
 }
 
+/* Upload-step "Conversation found" summary. */
+.parse-summary {
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: var(--success-bg);
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+  border-radius: var(--radius-lg);
+  animation: fadeSlideIn 0.4s var(--ease-out);
+}
+.parse-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 12px;
+}
+.parse-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+@media (max-width: 560px) {
+  .parse-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* Tablist (WAI-ARIA tabs pattern). */
 .tabs {
   display: flex;
