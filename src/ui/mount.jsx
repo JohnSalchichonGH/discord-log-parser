@@ -4,9 +4,13 @@
 import { render } from 'preact';
 import { Header } from './views/Header.jsx';
 import { ParseSummary } from './views/ParseSummary.jsx';
+import { ExportSummary } from './views/ExportSummary.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
 
 const summaryHost = document.getElementById('parse-summary');
 if (summaryHost) render(<ParseSummary />, summaryHost);
+
+const exportHost = document.getElementById('export-summary');
+if (exportHost) render(<ExportSummary />, exportHost);

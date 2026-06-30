@@ -14,6 +14,16 @@ import { signal, effect } from '@preact/signals';
    the worker has parsed the uploads. */
 export const parseSummary = signal(null);
 
+/* EXPORT SUMMARY — set after processing so the Export step can state, up front,
+   whether the output is complete or trimmed and how many messages it includes
+   (the review's "biggest UX risk": don't let trimming be a silent surprise).
+   Null until a run has produced outputs. Shape: { kept, total, budgetExceeded }. */
+export const exportSummary = signal(null);
+
+/* The currently selected output format, mirrored from the format <select> so the
+   export confirmation can name it. */
+export const exportFormat = signal('txt');
+
 /* THEME — persisted to localStorage; the effect keeps <html data-theme> and
    storage in sync whenever the signal changes. */
 function readTheme() {

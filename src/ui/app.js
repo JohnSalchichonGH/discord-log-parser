@@ -41,7 +41,7 @@ import {
   fileKey,
   markWorkerBroken,
 } from './worker-client.js';
-import { theme, parseSummary } from './store.js';
+import { theme, parseSummary, exportSummary, exportFormat } from './store.js';
 import { effect } from '@preact/signals';
 
 /* CONSTANTS */
@@ -135,6 +135,7 @@ function loadSettings() {
     if (s.dateTo) $('dateTo').value = s.dateTo;
     updateTokenLabel();
     syncNameToggles(); // reflect any persisted real-names/anonymize state
+    exportFormat.value = $('outputFormat').value; // keep the store in sync
     $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
     $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
   } catch (e) {}
@@ -205,6 +206,13 @@ $('filterLowActivity').addEventListener('change', function () {
 });
 $('chunkOutput').addEventListener('change', function () {
   $('chunkOptions').style.display = this.checked ? 'block' : 'none';
+});
+
+// Mirror the selected output format into the store so the Preact export
+// confirmation can name it.
+exportFormat.value = $('outputFormat').value;
+$('outputFormat').addEventListener('change', function () {
+  exportFormat.value = this.value;
 });
 
 // E4: "Use real names" and "Anonymize header" are opposites — enabling one
@@ -675,6 +683,15 @@ function runProcessing() {
       statusEl.dataset.engine = engine;
 
       processedOutputs = outputs;
+      // Feed the Preact export confirmation (complete vs trimmed).
+      exportSummary.value =
+        totalMessages > 0
+          ? {
+              kept: totalKept,
+              total: totalMessages,
+              budgetExceeded: outputs.some((o) => o.budgetExceeded),
+            }
+          : null;
       const allFinalChunks = [];
       const allUserMap = new Map();
       for (const po of outputs) {
