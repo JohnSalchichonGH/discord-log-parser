@@ -1,6 +1,6 @@
 {
   "name": "discord-log-parser",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A private, local workspace for Discord exports — merge, clean, export (HTML/TXT/JSON/CSV), and explore. Single self-contained HTML file, zero network requests.",
   "private": true,
   "license": "MIT",

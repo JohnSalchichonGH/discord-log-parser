@@ -5,6 +5,36 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-30
+
+Completes the **Preact + Signals** rework begun in 1.3.0: the legacy `app.js`
+controller is fully retired and the entire UI now renders from a single Preact
+component tree. No user-facing behavior change — still one self-contained,
+zero-network HTML file under the same strict CSP, with the parsing / identity /
+analytics / render engine unchanged and still behind the full test suite (now
+214 tests, up from 173).
+
+### Changed
+
+- **The whole UI is now Preact.** Every wizard step — Upload, Configure, Review,
+  and Export — renders from components under `ui/views/`, composed by
+  `ui/App.jsx` and mounted by `ui/bootstrap.jsx` into a lone `<div id="app">`.
+  The ~1,270-line `app.js` god controller (and `mount.jsx`) are deleted.
+- **Application state lives in signals.** Loaded files, bot users, the user
+  filter, all Configure settings, output format / chunking, and processing
+  status are signals on the store; the export pipeline reads a settings snapshot
+  instead of scattered DOM lookups.
+- **Wizard navigation** moved into `ui/nav.js` (the `step` signal plus a guarded
+  `goToStep`), with the app-specific hooks (have-files? / run-on-entering-Review)
+  injected rather than hard-wired into the controller.
+- **Processing orchestration** moved into a DOM-free `ui/processing.js` that
+  reads files + settings from the store and writes results back; the progress
+  bar and status line are now a reactive view.
+- **The Review analytics are hosted, not rewritten.** The imperative chart
+  renderers (Insights / Calendar / Wrapped, ~1,560 lines) mount once into static
+  host skeletons driven by `ui/analytics-host.js`, so Preact reconciliation never
+  wipes their generated SVG/HTML.
+
 ## [1.3.0] - 2026-06-30
 
 A UI/UX rework that repositions the tool as a **private, local Discord
