@@ -176,7 +176,7 @@ from `src/ui/bootstrap.jsx`) where `src/ui/store.js` holds the reactive state an
 `src/ui/views/*` and `src/ui/components/*` render it.
 
 ```bash
-npm test            # Vitest suite (173 tests)
+npm test            # Vitest suite (214 tests)
 npm run coverage    # tests + V8 coverage (lcov/html)
 npm run lint        # ESLint   ·   npm run format  (Prettier)
 npm run build:all   # both builds: lean + accurate-tokenizer
