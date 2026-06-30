@@ -192,6 +192,10 @@ body {
   transition: all 0.3s var(--ease-out);
   opacity: 0.45;
   position: relative;
+  /* native <button> resets */
+  font: inherit;
+  color: var(--text-secondary);
+  text-align: left;
 }
 .wizard-step.active {
   opacity: 1;
@@ -444,9 +448,22 @@ textarea { resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.5
   cursor: pointer;
   transition: background 0.2s;
   user-select: none;
+  position: relative; /* contains the visually-hidden checkbox */
 }
 .toggle-row:hover { background: var(--bg-surface-hover); }
-.toggle-row input[type="checkbox"] { display: none; }
+/* Visually hidden but still focusable (display:none drops it from tab order).
+   The label wraps the input, so a click/tap anywhere still toggles it. */
+.toggle-row input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+}
+.toggle-row input[type="checkbox"]:focus-visible + .toggle-switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .toggle-switch {
   width: 36px; height: 20px;
   background: var(--text-muted);
