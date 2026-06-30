@@ -22,7 +22,7 @@
         </div>
         <div class="wizard-step" data-step="3">
           <span class="step-num">3</span>
-          <span class="step-label">Preview</span>
+          <span class="step-label">Review</span>
         </div>
         <div class="wizard-step" data-step="4">
           <span class="step-num">4</span>
@@ -482,8 +482,17 @@
           <div class="progress-fill" id="progressFill"></div>
         </div>
 
+        <!-- Explore tab bar, rendered by Preact (ui/views/ExploreTabs.jsx);
+             switches which card below is shown via panel3[data-explore-tab]. -->
+        <div id="explore-tabs"></div>
+
         <!-- Stats -->
-        <div class="panel-card" id="statsCard" style="display: none">
+        <div
+          class="panel-card"
+          id="statsCard"
+          data-explore-panel="summary"
+          style="display: none"
+        >
           <div class="card-title">
             <svg
               width="18"
@@ -504,7 +513,12 @@
         </div>
 
         <!-- Token budget breakdown -->
-        <div class="panel-card" id="budgetCard" style="display: none">
+        <div
+          class="panel-card"
+          id="budgetCard"
+          data-explore-panel="technical"
+          style="display: none"
+        >
           <div class="card-title">
             <svg
               width="18"
@@ -524,7 +538,12 @@
         </div>
 
         <!-- Insights -->
-        <div class="panel-card" id="insightsCard" style="display: none">
+        <div
+          class="panel-card"
+          id="insightsCard"
+          data-explore-panel="insights"
+          style="display: none"
+        >
           <div class="card-title">
             <svg
               width="18"
@@ -623,7 +642,12 @@
         </div>
 
         <!-- Wrapped recap -->
-        <div class="panel-card" id="wrappedCard" style="display: none">
+        <div
+          class="panel-card"
+          id="wrappedCard"
+          data-explore-panel="wrapped"
+          style="display: none"
+        >
           <div class="card-title" style="justify-content: space-between">
             <span style="display: flex; align-items: center; gap: 10px">
               <svg
@@ -654,7 +678,12 @@
         </div>
 
         <!-- Message explorer -->
-        <div class="panel-card" id="messageExplorerCard" style="display: none">
+        <div
+          class="panel-card"
+          id="messageExplorerCard"
+          data-explore-panel="calendar"
+          style="display: none"
+        >
           <div class="card-title">
             <svg
               width="18"
@@ -704,7 +733,12 @@
         </div>
 
         <!-- Preview -->
-        <div class="panel-card" id="previewCard" style="display: none">
+        <div
+          class="panel-card"
+          id="previewCard"
+          data-explore-panel="transcript"
+          style="display: none"
+        >
           <div class="card-title">
             <svg
               width="18"

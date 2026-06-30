@@ -1175,6 +1175,27 @@ textarea:focus-visible,
   display: none;
 }
 
+/* Review-step Explore tabs: reveal only the active analytics card. The
+   !important overrides the inline display:block app.js sets when a card has
+   data, so an empty (no-data) card still stays hidden. */
+#explore-tabs {
+  margin-bottom: 16px;
+}
+#panel3[data-explore-tab='summary']
+  [data-explore-panel]:not([data-explore-panel='summary']),
+#panel3[data-explore-tab='transcript']
+  [data-explore-panel]:not([data-explore-panel='transcript']),
+#panel3[data-explore-tab='insights']
+  [data-explore-panel]:not([data-explore-panel='insights']),
+#panel3[data-explore-tab='calendar']
+  [data-explore-panel]:not([data-explore-panel='calendar']),
+#panel3[data-explore-tab='wrapped']
+  [data-explore-panel]:not([data-explore-panel='wrapped']),
+#panel3[data-explore-tab='technical']
+  [data-explore-panel]:not([data-explore-panel='technical']) {
+  display: none !important;
+}
+
 /* Upload-step "Conversation found" summary. */
 .parse-summary {
   margin-top: 16px;

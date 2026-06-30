@@ -47,6 +47,7 @@ import {
   exportSummary,
   exportFormat,
   goal,
+  exploreTab,
 } from './store.js';
 import { effect } from '@preact/signals';
 
@@ -234,6 +235,13 @@ effect(() => {
     sel.value = fmt;
     exportFormat.value = fmt;
   }
+});
+
+// Reflect the active Explore tab onto the Review panel so CSS reveals just the
+// matching analytics card (the cards are still rendered by the legacy code).
+effect(() => {
+  const panel = $('panel3');
+  if (panel) panel.dataset.exploreTab = exploreTab.value;
 });
 
 // E4: "Use real names" and "Anonymize header" are opposites — enabling one

@@ -30,6 +30,11 @@ export const exportFormat = signal('txt');
    it's the safe default. */
 export const goal = signal('custom');
 
+/* EXPLORE TAB — which analytics view is shown on the Review step. The cards
+   already exist in the DOM; app.js reflects this onto panel3[data-explore-tab]
+   and CSS shows just the active one. */
+export const exploreTab = signal('summary');
+
 /* THEME — persisted to localStorage; the effect keeps <html data-theme> and
    storage in sync whenever the signal changes. */
 function readTheme() {

@@ -6,6 +6,7 @@ import { Header } from './views/Header.jsx';
 import { ParseSummary } from './views/ParseSummary.jsx';
 import { ExportSummary } from './views/ExportSummary.jsx';
 import { GoalPicker } from './views/GoalPicker.jsx';
+import { ExploreTabs } from './views/ExploreTabs.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
@@ -18,3 +19,6 @@ if (exportHost) render(<ExportSummary />, exportHost);
 
 const goalHost = document.getElementById('goal-picker');
 if (goalHost) render(<GoalPicker />, goalHost);
+
+const exploreHost = document.getElementById('explore-tabs');
+if (exploreHost) render(<ExploreTabs />, exploreHost);

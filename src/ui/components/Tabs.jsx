@@ -1,6 +1,7 @@
-// Accessible tablist. `tabs` is [{ id, label }]; controlled via `active` +
-// `onSelect`. Roving tabindex + arrow-key navigation follow the WAI-ARIA tabs
-// pattern. Render the matching panel yourself with role="tabpanel".
+// Accessible tablist. `tabs` is [{ id, label, controls? }]; controlled via
+// `active` + `onSelect`. Roving tabindex + arrow-key navigation follow the
+// WAI-ARIA tabs pattern. Pass `controls` (the panel's id) to wire aria-controls;
+// omit it when the panels aren't role="tabpanel" regions.
 
 export function Tabs({ tabs, active, onSelect, class: cls = '' }) {
   const onKeyDown = (e) => {
@@ -24,7 +25,7 @@ export function Tabs({ tabs, active, onSelect, class: cls = '' }) {
           type="button"
           role="tab"
           aria-selected={active === t.id ? 'true' : 'false'}
-          aria-controls={`panel-${t.id}`}
+          aria-controls={t.controls || undefined}
           tabindex={active === t.id ? 0 : -1}
           class="tab"
           data-active={active === t.id ? 'true' : 'false'}
