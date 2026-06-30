@@ -5,6 +5,41 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-30
+
+A UI/UX rework that repositions the tool as a **private, local Discord
+workspace** — merge, clean, export, and explore — rather than primarily an
+"LLM text" utility. The UI now runs on a small **Preact + Signals** layer
+(rebuilt incrementally; the parsing/identity/analytics/render engine is
+unchanged and still behind the full test suite). Still one self-contained,
+zero-network HTML file under the same strict CSP.
+
+### Added
+
+- **"Conversation found" summary** on the Upload step — messages · participants ·
+  files · channels — so you immediately see that your files were understood.
+- **"What are you making?" goal picker** on the Configure step. Choosing _Complete
+  transcript_ or _Data export_ hides the AI/token settings (token budget, keyword
+  priority, custom preamble) and preselects a matching format; _Compact text_ and
+  _Custom_ show everything. Nothing is removed — _Custom_ is the default.
+- **Export confirmation** stating up front whether the export is **complete or
+  trimmed** (with included/excluded counts and the selected format), so trimming
+  is never a silent surprise.
+- **Local-only privacy badge** (_Runs locally · No uploads · No network_) surfaced
+  in the UI, not just the docs.
+
+### Changed
+
+- **Reframed** the header, README, and package description around
+  merge/clean/export/explore.
+- **The Review step is tabbed** (renamed from "Preview"): Summary / Transcript /
+  Insights / Calendar / Wrapped / Technical, instead of one long scroll.
+- **Settings now live in a signals store** (`ui/settings.js`) with centralized
+  localStorage persistence; the export pipeline reads a settings snapshot rather
+  than scattered DOM lookups.
+- **Accessibility:** the wizard steps are native `<button>`s and the toggle
+  checkboxes stay in the keyboard tab order (previously `display:none`).
+
 ### Fixed
 
 - **`pipeline.js` is no longer treated as a binary file by git/grep.** A stray NUL
