@@ -6,12 +6,12 @@ import { render, fireEvent } from '@testing-library/preact';
 import { Header } from '../src/ui/views/Header.jsx';
 import { WizardSteps } from '../src/ui/views/WizardSteps.jsx';
 import { Configure } from '../src/ui/views/Configure.jsx';
+import { Upload } from '../src/ui/views/Upload.jsx';
 import { setSetting } from '../src/ui/settings.js';
 
 // Load the real markup, then import the controller. If any element the app wires
 // to is missing/renamed, the top-level getElementById bindings throw and this
 // test fails loudly — a cheap parity guard for the UI migration.
-let initUserFilter;
 beforeAll(async () => {
   const html = readFileSync(resolve(process.cwd(), 'src/index.html'), 'utf8');
   const body = html.slice(
@@ -21,16 +21,18 @@ beforeAll(async () => {
   document.documentElement.setAttribute('data-theme', 'dark');
   document.body.innerHTML = body;
   window.scrollTo = () => {}; // jsdom doesn't implement it; goToStep calls it
-  ({ initUserFilter } = await import('../src/ui/app.js'));
-  // The wizard stepper + Configure form are Preact-rendered (mount.jsx isn't
-  // imported here); render them and wire the user filter as mount.jsx would.
+  await import('../src/ui/app.js');
+  // The wizard stepper, Upload step, and Configure form are Preact-rendered
+  // (mount.jsx isn't imported here); render them as mount.jsx would.
   render(h(WizardSteps, {}), {
     container: document.getElementById('wizardNav'),
+  });
+  render(h(Upload, {}), {
+    container: document.getElementById('upload-files'),
   });
   render(h(Configure, {}), {
     container: document.getElementById('configure-form'),
   });
-  initUserFilter();
 });
 
 describe('UI wiring smoke test', () => {
@@ -83,7 +85,7 @@ describe('UI wiring smoke test', () => {
       value: [file],
       configurable: true,
     });
-    input.dispatchEvent(new window.Event('change'));
+    fireEvent.change(input);
 
     await waitFor(() => document.getElementById('toStep2').disabled === false);
 
@@ -123,7 +125,7 @@ describe('UI wiring smoke test', () => {
       ],
       configurable: true,
     });
-    input.dispatchEvent(new window.Event('change'));
+    fireEvent.change(input);
     await waitFor(() => document.getElementById('toStep2').disabled === false);
 
     setSetting('useRealNames', true); // uid becomes the name

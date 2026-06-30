@@ -2,12 +2,11 @@
 // all parsing/processing/rendering to the tested modules under src/. Behavior is
 // preserved verbatim from the legacy index.html; only the pure logic moved out.
 
-import { formatBytes, escHtml } from '../core/format.js';
-import { parseFilename, buildGroups } from '../core/grouping.js';
+import { escHtml } from '../core/format.js';
+import { buildGroups } from '../core/grouping.js';
 import { localDate } from '../core/time.js';
 import {
   processGroup,
-  getRawMessages,
   getFilteredMessages,
   buildIdentity,
 } from '../core/pipeline.js';
@@ -22,8 +21,6 @@ import { loadCalendar, setCalendarTz } from './calendar.js';
 import { computeWrapped } from '../core/wrapped.js';
 import { renderWrapped, downloadWrappedPng } from './wrapped.js';
 import { chunkMessages } from '../core/chunking.js';
-import { parseTxtHeader } from '../parsers/txt.js';
-import { parseJsonHeader } from '../parsers/json.js';
 import { renderTxt } from '../render/txt.js';
 import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
@@ -42,11 +39,13 @@ import {
 } from './worker-client.js';
 import {
   theme,
-  parseSummary,
   exportSummary,
   exportFormat,
   goal,
   exploreTab,
+  loadedFiles,
+  botUsers,
+  selectedUsers,
 } from './store.js';
 import { settings, snapshotSettings, applySavedSettings } from './settings.js';
 import { configureNav, goToStep } from './nav.js';
@@ -71,10 +70,10 @@ const BAR_COLORS = [
   '#d088f0',
 ];
 
-/* STATE */
-let loadedFiles = []; // { name, content, isTxt, channelId, baseName, sortOrder, afterDate, size }
+/* STATE — loadedFiles, botUsers, and the user-filter selection now live in the
+   signals store (ui/store.js); the Preact Upload step + UserFilter render them,
+   and ui/files.js owns parsing/grouping. This controller still owns processing. */
 let processedOutputs = []; // { name, text, chunks, stats }
-let botUsers = new Set(); // author names tagged as bots
 
 /* DOM REFS */
 const $ = (id) => document.getElementById(id);
@@ -101,8 +100,16 @@ function restoreSettings() {
 /* WIZARD NAVIGATION — the step signal + goToStep live in ui/nav.js (rendered by
    the Preact stepper). Inject this controller's two dependencies. */
 configureNav({
-  canAdvance: () => loadedFiles.length > 0,
+  canAdvance: () => loadedFiles.value.length > 0,
   onEnterReview: () => runProcessing(),
+});
+
+// Enable "Continue" once at least one valid file is loaded (the Upload step's
+// file list is rendered by Preact; this button stays legacy DOM for now).
+effect(() => {
+  const valid = loadedFiles.value.filter((f) => !f.invalid);
+  const btn = $('toStep2');
+  if (btn) btn.disabled = valid.length === 0;
 });
 
 $('toStep2').addEventListener('click', () => goToStep(2));
@@ -161,371 +168,6 @@ function ensureCounterReady() {
   return Promise.resolve();
 }
 
-// USER FILTER — the list is populated from the uploaded files (still owned by
-// this controller; migrates with the Upload step). Its markup is a static-HTML
-// island inside the Preact Configure form, so wire its controls only once that
-// has mounted. Called by ui/mount.jsx.
-export function initUserFilter() {
-  $('userFilterHeader').addEventListener('click', function () {
-    this.classList.toggle('open');
-    $('userFilterBody').classList.toggle('open');
-  });
-  $('userSelectAll').addEventListener('click', (e) => {
-    e.preventDefault();
-    $('userFilterList')
-      .querySelectorAll('input[type=checkbox]')
-      .forEach((cb) => (cb.checked = true));
-    updateUserFilterCount();
-  });
-  $('userClearAll').addEventListener('click', (e) => {
-    e.preventDefault();
-    $('userFilterList')
-      .querySelectorAll('input[type=checkbox]')
-      .forEach((cb) => (cb.checked = false));
-    updateUserFilterCount();
-  });
-}
-function updateUserFilterCount() {
-  const checked = $('userFilterList').querySelectorAll('input:checked').length;
-  $('userFilterCount').textContent = checked
-    ? `${checked} selected`
-    : 'none selected = everyone';
-  $('userFilterCount').className = checked ? 'tag tag-accent' : 'tag tag-muted';
-}
-
-/* FILE HANDLING — DROP ZONE + FILE INPUT */
-const dropZone = $('dropZone');
-const fileInput = $('fileInput');
-
-['dragenter', 'dragover'].forEach((evt) => {
-  dropZone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-  });
-});
-['dragleave', 'drop'].forEach((evt) => {
-  dropZone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-  });
-});
-dropZone.addEventListener('drop', (e) => {
-  const files = Array.from(e.dataTransfer.files).filter((f) => {
-    const n = f.name.toLowerCase();
-    return n.endsWith('.html') || n.endsWith('.txt') || n.endsWith('.json');
-  });
-  if (files.length) addFiles(files);
-});
-fileInput.addEventListener('change', (e) => {
-  const files = Array.from(e.target.files);
-  if (files.length) addFiles(files);
-  fileInput.value = ''; // allow re-selecting same files
-});
-
-function addFiles(files) {
-  let pending = files.length;
-  files.forEach((file) => {
-    if (loadedFiles.find((f) => f.name === file.name && f.size === file.size)) {
-      if (--pending === 0) onAllFilesLoaded();
-      return;
-    }
-    const lower = file.name.toLowerCase();
-    const isTxt = lower.endsWith('.txt');
-    const isJson = lower.endsWith('.json');
-    const meta = isTxt
-      ? {
-          channelId: file.name,
-          baseName: file.name.replace(/\.txt$/i, ''),
-          afterDate: null,
-        }
-      : isJson
-        ? {
-            channelId: file.name,
-            baseName: file.name.replace(/\.json$/i, ''),
-            afterDate: null,
-          }
-        : parseFilename(file.name);
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const content = e.target.result;
-      let invalid = false,
-        error = null;
-      if (isTxt) {
-        const hdr = parseTxtHeader(content);
-        meta.channelId = hdr.channelId;
-        meta.baseName = hdr.baseName;
-      } else if (isJson) {
-        // JSON is validated at load time so malformed files surface loudly
-        // (E2) instead of silently producing nothing.
-        try {
-          const hdr = parseJsonHeader(content);
-          meta.channelId = hdr.channelId;
-          meta.baseName = hdr.baseName;
-          meta.afterDate = hdr.afterDate;
-        } catch (err) {
-          invalid = true;
-          error = err.message;
-        }
-      }
-      loadedFiles.push({
-        name: file.name,
-        isTxt,
-        isJson,
-        content,
-        channelId: meta.channelId,
-        baseName: meta.baseName,
-        sortOrder: file.lastModified,
-        afterDate: meta.afterDate,
-        size: file.size,
-        invalid,
-        error,
-      });
-      if (--pending === 0) onAllFilesLoaded();
-    };
-    // B1: a failed read must not leave `pending` stuck; record it and continue.
-    reader.onerror = function () {
-      loadedFiles.push({
-        name: file.name,
-        isTxt,
-        isJson,
-        content: '',
-        channelId: file.name,
-        baseName: file.name,
-        sortOrder: file.lastModified,
-        afterDate: null,
-        size: file.size,
-        invalid: true,
-        error: 'Could not read file.',
-      });
-      if (--pending === 0) onAllFilesLoaded();
-    };
-    reader.readAsText(file);
-  });
-}
-
-function removeFile(idx) {
-  loadedFiles.splice(idx, 1);
-  if (loadedFiles.length === 0) {
-    dropZone.classList.remove('has-files');
-    $('fileListContainer').style.display = 'none';
-    $('toStep2').disabled = true;
-    parseSummary.value = null;
-    renderDropZoneEmpty();
-  } else {
-    onAllFilesLoaded();
-  }
-}
-
-function renderDropZoneEmpty() {
-  dropZone.innerHTML = `
-    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/>
-      <line x1="12" y1="3" x2="12" y2="15"/>
-    </svg>
-    <div class="drop-label">Drop files here or click to browse</div>
-    <div class="drop-hint">.json, .html, or .txt files from DiscordChatExporter</div>
-    <input type="file" id="fileInput" accept=".html,.txt,.json" multiple aria-label="Upload .json, .html, or .txt Discord export files">
-  `;
-  const newInput = dropZone.querySelector('input');
-  newInput.addEventListener('change', (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length) addFiles(files);
-    newInput.value = '';
-  });
-}
-
-function onAllFilesLoaded() {
-  // Render file list
-  const listEl = $('fileList');
-  listEl.innerHTML = '';
-  loadedFiles.forEach((f, i) => {
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    const errNote = f.invalid
-      ? `<span class="file-size" style="color:var(--danger);" title="${escHtml(f.error || 'Invalid file')}">⚠ ${escHtml(f.error || 'Invalid file')}</span>`
-      : `<span class="file-size">${formatBytes(f.size)}</span>`;
-    item.innerHTML = `
-      <svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <span class="file-name">${escHtml(f.name)}</span>
-      ${errNote}
-      <button class="file-remove" type="button" data-idx="${i}" title="Remove" aria-label="Remove ${escHtml(f.name)}">✕</button>
-    `;
-    listEl.appendChild(item);
-  });
-
-  // Only valid files take part in grouping, author collection, and processing.
-  const validFiles = loadedFiles.filter((f) => !f.invalid);
-  listEl.querySelectorAll('.file-remove').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeFile(parseInt(btn.dataset.idx));
-    });
-  });
-
-  // Merge groups preview
-  const groups = buildGroups(validFiles);
-  const mgEl = $('mergeGroups');
-  mgEl.innerHTML = '';
-  const groupKeys = [];
-  for (const [key, arr] of groups) {
-    groupKeys.push(key);
-    const box = document.createElement('div');
-    box.className = 'merge-group';
-    box.dataset.groupKey = key;
-    const titleText =
-      escHtml(arr[0].baseName) +
-      (arr.length > 1 ? ` — ${arr.length} files → merged` : '');
-    let html = `<label class="merge-header"><input type="checkbox" class="merge-group-cb" data-key="${escHtml(key)}"><span class="merge-title">${titleText}</span></label>`;
-    for (const f of arr) {
-      const modDate = new Date(f.sortOrder).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const badge = f.afterDate
-        ? `<span class="badge badge-dated">after ${escHtml(f.afterDate)}</span>`
-        : `<span class="badge badge-base">mod: ${modDate}</span>`;
-      html += `<div class="merge-file">${escHtml(f.name)} ${badge}</div>`;
-    }
-    box.innerHTML = html;
-    mgEl.appendChild(box);
-  }
-
-  const toolbar = $('mergeToolbar');
-  toolbar.classList.toggle('visible', groups.size > 1);
-  updateMergeToolbar();
-  mgEl.querySelectorAll('.merge-group-cb').forEach((cb) => {
-    cb.addEventListener('change', function () {
-      this.closest('.merge-group').classList.toggle('selected', this.checked);
-      updateMergeToolbar();
-    });
-  });
-
-  // Populate the user filter (author list). Parsing happens once — off-thread in
-  // the worker when available (B3b), else inline on the main thread (B2 cache).
-  populateUserFilter(validFiles);
-
-  dropZone.classList.add('has-files');
-  $('fileListContainer').style.display = 'block';
-  // Can only continue if at least one valid file loaded.
-  $('toStep2').disabled = validFiles.length === 0;
-}
-
-// Author name → message count, computed on the main thread from cached parses.
-function inlineAuthors(validFiles) {
-  const m = new Map();
-  for (const f of validFiles)
-    for (const msg of getRawMessages(f))
-      m.set(msg.authorName, (m.get(msg.authorName) || 0) + 1);
-  return [...m.entries()];
-}
-
-async function populateUserFilter(validFiles) {
-  let entries;
-  const w = getWorker();
-  if (w) {
-    try {
-      const res = await workerRequest(w, {
-        type: 'setFiles',
-        files: validFiles.map((f) => ({
-          key: fileKey(f),
-          content: f.content,
-          isTxt: f.isTxt,
-          isJson: f.isJson,
-        })),
-      });
-      entries = res.authors;
-    } catch {
-      markWorkerBroken();
-      entries = inlineAuthors(validFiles);
-    }
-  } else {
-    entries = inlineAuthors(validFiles);
-  }
-  renderUserFilter(entries);
-}
-
-function renderUserFilter(entries) {
-  const listUF = $('userFilterList');
-  listUF.innerHTML = '';
-  entries
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([name, count]) => {
-      const item = document.createElement('label');
-      item.className = 'user-item';
-      const isBot = botUsers.has(name);
-      item.innerHTML = `
-      <input type="checkbox" value="${escHtml(name)}">
-      <span class="user-name">${escHtml(name)}</span>
-      <span class="user-count">${count}</span>
-      <span class="bot-tag ${isBot ? 'active' : ''}" data-name="${escHtml(name)}" title="Click to tag/untag as bot">${isBot ? 'BOT' : 'bot?'}</span>
-    `;
-      item
-        .querySelector('input')
-        .addEventListener('change', updateUserFilterCount);
-      item.querySelector('.bot-tag').addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        const n = this.dataset.name;
-        if (botUsers.has(n)) {
-          botUsers.delete(n);
-          this.classList.remove('active');
-          this.textContent = 'bot?';
-        } else {
-          botUsers.add(n);
-          this.classList.add('active');
-          this.textContent = 'BOT';
-        }
-      });
-      listUF.appendChild(item);
-    });
-  updateUserFilterCount();
-
-  // Feed the Preact parse-summary card (counts are raw, pre-dedup; the Review
-  // step shows deduplicated totals).
-  const valid = loadedFiles.filter((f) => !f.invalid);
-  parseSummary.value = valid.length
-    ? {
-        messages: entries.reduce((sum, [, c]) => sum + c, 0),
-        participants: entries.length,
-        files: valid.length,
-        channels: buildGroups(valid).size,
-      }
-    : null;
-}
-
-/* MANUAL GROUP MERGING */
-function updateMergeToolbar() {
-  const checked = document.querySelectorAll('.merge-group-cb:checked');
-  const count = checked.length;
-  $('mergeSelCount').textContent = count;
-  $('mergeBtn').disabled = count < 2;
-  $('mergeBtnText').textContent =
-    count < 2 ? 'Select 2+ to merge' : `Merge ${count} groups`;
-}
-
-$('mergeBtn').addEventListener('click', () => {
-  const checked = [...document.querySelectorAll('.merge-group-cb:checked')];
-  if (checked.length < 2) return;
-
-  const selectedKeys = checked.map((cb) => cb.dataset.key);
-  const targetKey = selectedKeys[0];
-  const targetFile = loadedFiles.find((f) => f.channelId === targetKey);
-  const targetBaseName = targetFile ? targetFile.baseName : 'Merged';
-
-  for (const f of loadedFiles) {
-    if (selectedKeys.includes(f.channelId)) {
-      f.channelId = targetKey;
-      f.baseName = targetBaseName;
-    }
-  }
-
-  onAllFilesLoaded();
-});
-
 /* PROCESSING PIPELINE */
 function runProcessing() {
   const statusEl = $('processStatus');
@@ -554,12 +196,9 @@ function runProcessing() {
       const minMsgs = cfg.filterLowActivity
         ? Math.max(1, parseInt(cfg.minMessages) || 10)
         : 0;
-      const ufList = $('userFilterList');
-      const userFilterCbs = ufList
-        ? [...ufList.querySelectorAll('input:checked')].map((cb) => cb.value)
-        : [];
+      // Selected author names from the Preact user filter (empty = everyone).
       const userFilter =
-        userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
+        selectedUsers.value.size > 0 ? new Set(selectedUsers.value) : null;
       const dateFromVal = cfg.dateFrom ? localDate(cfg.dateFrom, false) : null;
       const dateToVal = cfg.dateTo ? localDate(cfg.dateTo, true) : null;
       const keywordsRaw = cfg.keywords.trim();
@@ -578,7 +217,7 @@ function runProcessing() {
         maxChars,
         userFilter,
         filterBots: cfg.filterBots,
-        botSet: botUsers,
+        botSet: botUsers.value,
         filterSystem: cfg.filterSystem,
         filterMediaOnly: cfg.filterMediaOnly,
         dateFrom: dateFromVal,
@@ -589,7 +228,7 @@ function runProcessing() {
 
       fill.style.width = '40%';
 
-      const validFiles = loadedFiles.filter((f) => !f.invalid);
+      const validFiles = loadedFiles.value.filter((f) => !f.invalid);
       const useAccurate = !!cfg.useAccurateTokens;
       const { outputs, totalMessages, totalFiltered, totalKept, engine } =
         await computeOutputs(validFiles, opts, useAccurate);

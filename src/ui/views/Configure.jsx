@@ -9,30 +9,17 @@
 // reflects the `goal` signal onto #panel2[data-goal] and styles.css hides the
 // `.ai-setting` cards — these cards keep that class.
 //
-// The user filter stays legacy DOM: it's populated from the uploaded files by
-// app.js (and migrates with the Upload step in a later phase). It's hosted here
-// as a static-HTML island (never re-rendered by Preact) so app.js keeps owning
-// it via the same element ids; app.js's initUserFilter() wires it after mount.
+// The user filter (UserFilter.jsx) is rendered inside the Filters card; it reads
+// the same store signals the Upload step's files.js helpers populate.
 
-import { Component } from 'preact';
 import { Toggle } from '../components/index.js';
 import { getSetting, setSetting } from '../settings.js';
+import { UserFilter } from './UserFilter.jsx';
 import {
   hasAccurate,
   enableAccurate,
   disableAccurate,
 } from '../../core/token-config.js';
-
-// A foreign-DOM host: renders an HTML string once and never updates, so code
-// outside Preact (app.js's user-filter population/wiring) can own its subtree.
-class StaticHtml extends Component {
-  shouldComponentUpdate() {
-    return false;
-  }
-  render({ html }) {
-    return <div dangerouslySetInnerHTML={{ __html: html }} />;
-  }
-}
 
 const Icon = ({ children }) => (
   <svg
@@ -46,24 +33,6 @@ const Icon = ({ children }) => (
     {children}
   </svg>
 );
-
-// The user-filter section, kept byte-for-byte from the legacy markup so app.js's
-// element lookups keep working. The list is populated by app.js once files load.
-const USER_FILTER_HTML = `
-  <hr class="section-divider" />
-  <div class="collapsible-header" id="userFilterHeader">
-    <span class="arrow">▶</span>
-    User filter
-    <span class="tag tag-muted" id="userFilterCount">none selected = everyone</span>
-  </div>
-  <div class="collapsible-body" id="userFilterBody">
-    <div class="user-list" id="userFilterList"></div>
-    <div class="user-actions">
-      <a id="userSelectAll">Select all</a>
-      <a id="userClearAll">Clear all</a>
-    </div>
-  </div>
-`;
 
 // Character-budget label derived from the token count (≈ 4 chars/token).
 function charLabel(maxTokens) {
@@ -244,8 +213,8 @@ export function Configure() {
           desc="Messages with only images/stickers and no text"
         />
 
-        {/* User filter — legacy DOM island, populated/wired by app.js. */}
-        <StaticHtml html={USER_FILTER_HTML} />
+        {/* User filter — populated from the uploaded files (ui/files.js). */}
+        <UserFilter />
       </div>
 
       {/* Keyword Priority */}

@@ -78,7 +78,7 @@ describe('Configure', () => {
     expect(getSetting('useRealNames')).toBe(false);
   });
 
-  it('hosts the legacy user-filter island for app.js to populate', () => {
+  it('renders the user filter inside the Filters card', () => {
     const { container } = render(<Configure />);
     expect(container.querySelector('#userFilterList')).not.toBeNull();
     expect(container.querySelector('#userFilterHeader')).not.toBeNull();

@@ -7,6 +7,20 @@
 
 import { signal, effect } from '@preact/signals';
 
+/* UPLOAD STATE — the uploaded files and the per-author bot/selection state, moved
+   out of app.js so the Preact Upload step + user filter render from them and the
+   processing pipeline reads them instead of the DOM.
+   - loadedFiles: { name, content, isTxt, isJson, channelId, baseName, sortOrder,
+                    afterDate, size, invalid, error } — all dropped/picked files.
+   - botUsers / selectedUsers: author-name Sets (replaced wholesale on change so
+     the signals stay reactive). selectedUsers backs the user-filter checkboxes.
+   - authorEntries: [name, count][] from parsing the valid files (off-thread when
+     the worker is up), sorted desc; the user filter renders from it. */
+export const loadedFiles = signal([]);
+export const botUsers = signal(new Set());
+export const selectedUsers = signal(new Set());
+export const authorEntries = signal([]);
+
 /* PARSE SUMMARY — what the upload step found, so the user gets immediate "it
    understood my files" confidence. Null when no files are loaded. Shape:
    { messages, participants, files, channels }. Counts are raw (pre-dedup);
