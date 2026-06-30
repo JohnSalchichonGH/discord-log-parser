@@ -2,13 +2,16 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { h } from 'preact';
-import { render } from '@testing-library/preact';
+import { render, fireEvent } from '@testing-library/preact';
 import { Header } from '../src/ui/views/Header.jsx';
 import { WizardSteps } from '../src/ui/views/WizardSteps.jsx';
+import { Configure } from '../src/ui/views/Configure.jsx';
+import { setSetting } from '../src/ui/settings.js';
 
 // Load the real markup, then import the controller. If any element the app wires
 // to is missing/renamed, the top-level getElementById bindings throw and this
 // test fails loudly — a cheap parity guard for the UI migration.
+let initUserFilter;
 beforeAll(async () => {
   const html = readFileSync(resolve(process.cwd(), 'src/index.html'), 'utf8');
   const body = html.slice(
@@ -18,11 +21,16 @@ beforeAll(async () => {
   document.documentElement.setAttribute('data-theme', 'dark');
   document.body.innerHTML = body;
   window.scrollTo = () => {}; // jsdom doesn't implement it; goToStep calls it
-  await import('../src/ui/app.js');
-  // The wizard stepper is now Preact-rendered (mount.jsx isn't imported here).
+  ({ initUserFilter } = await import('../src/ui/app.js'));
+  // The wizard stepper + Configure form are Preact-rendered (mount.jsx isn't
+  // imported here); render them and wire the user filter as mount.jsx would.
   render(h(WizardSteps, {}), {
     container: document.getElementById('wizardNav'),
   });
+  render(h(Configure, {}), {
+    container: document.getElementById('configure-form'),
+  });
+  initUserFilter();
 });
 
 describe('UI wiring smoke test', () => {
@@ -47,17 +55,19 @@ describe('UI wiring smoke test', () => {
   });
 
   it('updates the char-budget label from the token input', () => {
-    const input = document.getElementById('maxTokens');
-    input.value = '200000';
-    input.dispatchEvent(new window.Event('input'));
+    fireEvent.input(document.getElementById('maxTokens'), {
+      target: { value: '200000' },
+    });
     expect(document.getElementById('maxCharsLabel').textContent).toBe('800K');
   });
 
-  it('reveals the min-messages row when low-activity filter is toggled', () => {
-    const cb = document.getElementById('filterLowActivity');
-    cb.checked = true;
-    cb.dispatchEvent(new window.Event('change'));
-    expect(document.getElementById('minMsgRow').style.display).toBe('block');
+  it('reveals the min-messages input when low-activity filter is toggled', () => {
+    expect(document.getElementById('minMessages')).toBeNull();
+    const btn = [...document.querySelectorAll('.switch-row')].find((b) =>
+      b.textContent.includes('Exclude low-activity users'),
+    );
+    fireEvent.click(btn);
+    expect(document.getElementById('minMessages')).not.toBeNull();
   });
 
   it('loads a DCE JSON export through the file input (A2 wiring)', async () => {
@@ -116,8 +126,8 @@ describe('UI wiring smoke test', () => {
     input.dispatchEvent(new window.Event('change'));
     await waitFor(() => document.getElementById('toStep2').disabled === false);
 
-    document.getElementById('useRealNames').checked = true; // uid becomes the name
-    document.getElementById('filterLowActivity').checked = false; // keep the 1-msg user
+    setSetting('useRealNames', true); // uid becomes the name
+    setSetting('filterLowActivity', false); // keep the 1-msg user
     document.getElementById('toStep2').click();
     document.getElementById('toStep3').click();
     await waitFor(

@@ -8,6 +8,8 @@ import { ExportSummary } from './views/ExportSummary.jsx';
 import { GoalPicker } from './views/GoalPicker.jsx';
 import { ExploreTabs } from './views/ExploreTabs.jsx';
 import { WizardSteps } from './views/WizardSteps.jsx';
+import { Configure } from './views/Configure.jsx';
+import { initUserFilter } from './app.js';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
@@ -26,3 +28,11 @@ if (goalHost) render(<GoalPicker />, goalHost);
 
 const exploreHost = document.getElementById('explore-tabs');
 if (exploreHost) render(<ExploreTabs />, exploreHost);
+
+// Configure step. After it mounts (its user-filter island now exists in the
+// DOM), let app.js wire the user-filter controls it still owns.
+const configureHost = document.getElementById('configure-form');
+if (configureHost) {
+  render(<Configure />, configureHost);
+  initUserFilter();
+}

@@ -31,7 +31,6 @@ import { renderCSV } from '../render/csv.js';
 import { renderHTML } from '../render/html.js';
 import {
   countTokens,
-  hasAccurate,
   enableAccurate,
   disableAccurate,
 } from '../core/token-config.js';
@@ -49,7 +48,7 @@ import {
   goal,
   exploreTab,
 } from './store.js';
-import { snapshotSettings, applySavedSettings } from './settings.js';
+import { settings, snapshotSettings, applySavedSettings } from './settings.js';
 import { configureNav, goToStep } from './nav.js';
 import { effect } from '@preact/signals';
 
@@ -89,15 +88,13 @@ effect(() => {
   if (card && card.style.display !== 'none') renderWrappedRecap();
 });
 
-/* SETTINGS PERSISTENCE — state lives in the signals store (ui/settings.js).
-   Restore persisted values onto the inputs, then run the load-time side effects
-   the controls need. */
+/* SETTINGS PERSISTENCE — state lives in the signals store (ui/settings.js) and
+   the Configure controls (ui/views/Configure.jsx) render from it. Restore the
+   persisted store, then run the load-time side effects the still-legacy Export
+   controls (panel4) need. */
 function restoreSettings() {
   const s = applySavedSettings();
-  updateTokenLabel();
-  syncNameToggles(); // reflect any persisted real-names/anonymize state
   exportFormat.value = $('outputFormat').value; // keep the store in sync
-  $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
   $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
 }
 
@@ -118,25 +115,8 @@ $('backTo1').addEventListener('click', () => goToStep(1));
 $('backTo2').addEventListener('click', () => goToStep(2));
 $('backTo3').addEventListener('click', () => goToStep(3));
 
-/* TOKEN LABEL UPDATES */
-function updateTokenLabel() {
-  const t = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
-  const c = t * 4;
-  $('maxCharsLabel').textContent =
-    c >= 1e6 ? (c / 1e6).toFixed(1) + 'M' : (c / 1e3).toFixed(0) + 'K';
-}
-$('maxTokens').addEventListener('input', updateTokenLabel);
-$('modelPreset').addEventListener('change', function () {
-  if (this.value !== 'custom') {
-    $('maxTokens').value = this.value;
-    updateTokenLabel();
-  }
-});
-
-/* UI TOGGLE WIRING */
-$('filterLowActivity').addEventListener('change', function () {
-  $('minMsgRow').style.display = this.checked ? 'block' : 'none';
-});
+/* EXPORT-STEP WIRING — panel4 controls are still legacy DOM (the Configure
+   controls moved to the Preact form bound to the settings store). */
 $('chunkOutput').addEventListener('change', function () {
   $('chunkOptions').style.display = this.checked ? 'block' : 'none';
 });
@@ -149,7 +129,8 @@ $('outputFormat').addEventListener('change', function () {
 });
 
 // The output goal (Configure step) collapses the AI/token settings that don't
-// apply and pre-selects a matching export format. 'custom' shows everything.
+// apply (styles.css hides .ai-setting via #panel2[data-goal]) and pre-selects a
+// matching export format. 'custom' shows everything.
 const GOAL_FORMAT = { complete: 'html', compact: 'txt', data: 'json' };
 effect(() => {
   const g = goal.value;
@@ -170,54 +151,40 @@ effect(() => {
   if (panel) panel.dataset.exploreTab = exploreTab.value;
 });
 
-// E4: "Use real names" and "Anonymize header" are opposites — enabling one
-// would otherwise defeat the other. Keep them mutually exclusive.
-function syncNameToggles(changed) {
-  const real = $('useRealNames'),
-    redact = $('redactNames');
-  if (changed === 'real' && real.checked) redact.checked = false;
-  if (changed === 'redact' && redact.checked) real.checked = false;
-  redact.closest('.toggle-row').classList.toggle('is-disabled', real.checked);
-  real.closest('.toggle-row').classList.toggle('is-disabled', redact.checked);
-}
-$('useRealNames').addEventListener('change', () => syncNameToggles('real'));
-$('redactNames').addEventListener('change', () => syncNameToggles('redact'));
-
-// Accurate tokenizer toggle — present only in the accurate build.
-if (hasAccurate()) {
-  $('accurateTokensRow').style.display = '';
-  $('useAccurateTokens').addEventListener('change', function () {
-    // Start loading early so the counter is ready by preview time.
-    if (this.checked) enableAccurate();
-    else disableAccurate();
-  });
-}
-// Resolve once the selected token counter is loaded (BPE load is async).
+// Resolve once the selected token counter is loaded (BPE load is async). The
+// accurate toggle lives in the Preact Configure form (it calls enable/disable
+// eagerly so the counter is ready by preview time); this guards the processing
+// path against the store's current value.
 function ensureCounterReady() {
-  const cb = $('useAccurateTokens');
-  if (cb && cb.checked) return enableAccurate();
+  if (settings.value.useAccurateTokens) return enableAccurate();
   disableAccurate();
   return Promise.resolve();
 }
 
-$('userFilterHeader').addEventListener('click', function () {
-  this.classList.toggle('open');
-  $('userFilterBody').classList.toggle('open');
-});
-$('userSelectAll').addEventListener('click', (e) => {
-  e.preventDefault();
-  $('userFilterList')
-    .querySelectorAll('input[type=checkbox]')
-    .forEach((cb) => (cb.checked = true));
-  updateUserFilterCount();
-});
-$('userClearAll').addEventListener('click', (e) => {
-  e.preventDefault();
-  $('userFilterList')
-    .querySelectorAll('input[type=checkbox]')
-    .forEach((cb) => (cb.checked = false));
-  updateUserFilterCount();
-});
+// USER FILTER — the list is populated from the uploaded files (still owned by
+// this controller; migrates with the Upload step). Its markup is a static-HTML
+// island inside the Preact Configure form, so wire its controls only once that
+// has mounted. Called by ui/mount.jsx.
+export function initUserFilter() {
+  $('userFilterHeader').addEventListener('click', function () {
+    this.classList.toggle('open');
+    $('userFilterBody').classList.toggle('open');
+  });
+  $('userSelectAll').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('userFilterList')
+      .querySelectorAll('input[type=checkbox]')
+      .forEach((cb) => (cb.checked = true));
+    updateUserFilterCount();
+  });
+  $('userClearAll').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('userFilterList')
+      .querySelectorAll('input[type=checkbox]')
+      .forEach((cb) => (cb.checked = false));
+    updateUserFilterCount();
+  });
+}
 function updateUserFilterCount() {
   const checked = $('userFilterList').querySelectorAll('input:checked').length;
   $('userFilterCount').textContent = checked
@@ -587,9 +554,10 @@ function runProcessing() {
       const minMsgs = cfg.filterLowActivity
         ? Math.max(1, parseInt(cfg.minMessages) || 10)
         : 0;
-      const userFilterCbs = [
-        ...$('userFilterList').querySelectorAll('input:checked'),
-      ].map((cb) => cb.value);
+      const ufList = $('userFilterList');
+      const userFilterCbs = ufList
+        ? [...ufList.querySelectorAll('input:checked')].map((cb) => cb.value)
+        : [];
       const userFilter =
         userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
       const dateFromVal = cfg.dateFrom ? localDate(cfg.dateFrom, false) : null;
@@ -783,8 +751,7 @@ function renderPreview(idx) {
       : previewText;
   const chars = previewText.length;
   const estTokens = countTokens(previewText);
-  const tokenLabel =
-    $('useAccurateTokens') && $('useAccurateTokens').checked ? '' : '~';
+  const tokenLabel = settings.value.useAccurateTokens ? '' : '~';
   $('previewInfo').textContent =
     `${lines.length} lines · ${chars.toLocaleString()} chars · ${tokenLabel}${estTokens.toLocaleString()} tokens`;
 }
@@ -1080,7 +1047,8 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
       .reduce((s, c) => s + c.contentParts.join('\n').length + 15, 0);
     budgetBars.push({ uid, chars: userChars });
   }
-  const maxChars = Math.max(1, parseInt($('maxTokens').value) || 1375000) * 4;
+  const maxChars =
+    Math.max(1, parseInt(settings.value.maxTokens) || 1375000) * 4;
   let budgetHtml = '';
   budgetBars.forEach((b, i) => {
     const pct = Math.max(1, (b.chars / maxChars) * 100);
