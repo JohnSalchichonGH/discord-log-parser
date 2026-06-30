@@ -35,14 +35,14 @@ default file stays small.
 
 ## Module layout
 
-| Path            | Contents                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `src/core/`     | grouping, pipeline, identity/dedup, chunking, `analytics.js`, `wrapped.js` stats, token estimation, time/format helpers |
-| `src/parsers/`  | JSON, HTML and TXT export parsers (parse once into format-independent raw messages)                                     |
-| `src/render/`   | TXT / JSON / Markdown / CSV renderers                                                                                   |
+| Path            | Contents                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/`     | grouping, pipeline, identity/dedup, chunking, `analytics.js`, `wrapped.js` stats, token estimation, time/format helpers                                                         |
+| `src/parsers/`  | JSON, HTML and TXT export parsers (parse once into format-independent raw messages)                                                                                             |
+| `src/render/`   | TXT / JSON / Markdown / CSV renderers                                                                                                                                           |
 | `src/ui/`       | Preact app (`App.jsx`, `bootstrap.jsx`, `views/**`, `components/**`), signals `store.js`/`settings.js`/`nav.js`, and the `insights.js`, `calendar.js`, `wrapped.js` visualizers |
-| `src/worker.js` | Web Worker: off-main-thread parse + pipeline + analytics (with a main-thread fallback)                                  |
-| `test/`         | Vitest suites + synthetic DiscordChatExporter fixtures                                                                  |
+| `src/worker.js` | Web Worker: off-main-thread parse + pipeline + analytics (with a main-thread fallback)                                                                                          |
+| `test/`         | Vitest suites + synthetic DiscordChatExporter fixtures                                                                                                                          |
 
 ## How identity & de-duplication work
 

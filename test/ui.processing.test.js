@@ -81,13 +81,25 @@ beforeEach(() => {
   processResult.value = null;
   insightContext.value = null;
   exportSummary.value = null;
-  processing.value = { active: false, pct: 0, status: '', kind: '', engine: '' };
+  processing.value = {
+    active: false,
+    pct: 0,
+    status: '',
+    kind: '',
+    engine: '',
+  };
   settings.value = {};
 });
 
 describe('ProcessProgress / ProcessStatus views', () => {
   it('shows the bar (active) and fill width from the processing signal', () => {
-    processing.value = { active: true, pct: 40, status: '', kind: '', engine: '' };
+    processing.value = {
+      active: true,
+      pct: 40,
+      status: '',
+      kind: '',
+      engine: '',
+    };
     const { container } = render(h(ProcessProgress, {}));
     const bar = container.querySelector('.progress-bar');
     expect(bar.classList.contains('active')).toBe(true);
@@ -95,7 +107,13 @@ describe('ProcessProgress / ProcessStatus views', () => {
   });
 
   it('hides the bar when no run is active', () => {
-    processing.value = { active: false, pct: 0, status: '', kind: '', engine: '' };
+    processing.value = {
+      active: false,
+      pct: 0,
+      status: '',
+      kind: '',
+      engine: '',
+    };
     const { container } = render(h(ProcessProgress, {}));
     expect(
       container.querySelector('.progress-bar').classList.contains('active'),
@@ -157,7 +175,10 @@ describe('runProcessing (inline path)', () => {
     processResult.value = { totalMessages: 9, totalFiltered: 9, totalKept: 9 };
 
     await addFiles([
-      file('G - g [1].json', mkJson('1', 'g', [{ id: 'a', name: 'a', count: 1 }])),
+      file(
+        'G - g [1].json',
+        mkJson('1', 'g', [{ id: 'a', name: 'a', count: 1 }]),
+      ),
     ]);
 
     // Capture the in-flight state synchronously (before the awaited pipeline).
@@ -203,7 +224,10 @@ describe('computeOutputs engine selection', () => {
   it('falls back to the inline path when the worker throws', async () => {
     // Parse inline first (default null worker), then arm a failing worker.
     await addFiles([
-      file('G - g [1].json', mkJson('1', 'g', [{ id: 'a', name: 'a', count: 2 }])),
+      file(
+        'G - g [1].json',
+        mkJson('1', 'g', [{ id: 'a', name: 'a', count: 2 }]),
+      ),
     ]);
     const validFiles = loadedFiles.value.filter((f) => !f.invalid);
     vi.clearAllMocks();
@@ -220,7 +244,10 @@ describe('computeOutputs engine selection', () => {
 
   it('skips the worker entirely on the accurate-token path', async () => {
     await addFiles([
-      file('G - g [1].json', mkJson('1', 'g', [{ id: 'a', name: 'a', count: 1 }])),
+      file(
+        'G - g [1].json',
+        mkJson('1', 'g', [{ id: 'a', name: 'a', count: 1 }]),
+      ),
     ]);
     const validFiles = loadedFiles.value.filter((f) => !f.invalid);
     vi.clearAllMocks();
