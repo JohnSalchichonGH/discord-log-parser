@@ -5,6 +5,7 @@ import { render } from 'preact';
 import { Header } from './views/Header.jsx';
 import { ParseSummary } from './views/ParseSummary.jsx';
 import { ExportSummary } from './views/ExportSummary.jsx';
+import { GoalPicker } from './views/GoalPicker.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
@@ -14,3 +15,6 @@ if (summaryHost) render(<ParseSummary />, summaryHost);
 
 const exportHost = document.getElementById('export-summary');
 if (exportHost) render(<ExportSummary />, exportHost);
+
+const goalHost = document.getElementById('goal-picker');
+if (goalHost) render(<GoalPicker />, goalHost);

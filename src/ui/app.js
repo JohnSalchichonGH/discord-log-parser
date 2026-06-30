@@ -41,7 +41,13 @@ import {
   fileKey,
   markWorkerBroken,
 } from './worker-client.js';
-import { theme, parseSummary, exportSummary, exportFormat } from './store.js';
+import {
+  theme,
+  parseSummary,
+  exportSummary,
+  exportFormat,
+  goal,
+} from './store.js';
 import { effect } from '@preact/signals';
 
 /* CONSTANTS */
@@ -213,6 +219,21 @@ $('chunkOutput').addEventListener('change', function () {
 exportFormat.value = $('outputFormat').value;
 $('outputFormat').addEventListener('change', function () {
   exportFormat.value = this.value;
+});
+
+// The output goal (Configure step) collapses the AI/token settings that don't
+// apply and pre-selects a matching export format. 'custom' shows everything.
+const GOAL_FORMAT = { complete: 'html', compact: 'txt', data: 'json' };
+effect(() => {
+  const g = goal.value;
+  const panel = $('panel2');
+  if (panel) panel.dataset.goal = g;
+  const fmt = GOAL_FORMAT[g];
+  const sel = $('outputFormat');
+  if (fmt && sel && sel.value !== fmt) {
+    sel.value = fmt;
+    exportFormat.value = fmt;
+  }
 });
 
 // E4: "Use real names" and "Anonymize header" are opposites — enabling one

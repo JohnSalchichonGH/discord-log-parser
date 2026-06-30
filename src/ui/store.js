@@ -24,6 +24,12 @@ export const exportSummary = signal(null);
    export confirmation can name it. */
 export const exportFormat = signal('txt');
 
+/* OUTPUT GOAL — "What are you making?" Drives which settings the Configure step
+   shows (the AI/token controls collapse unless you're making compact text) and
+   the default export format. 'custom' shows everything (the legacy behavior), so
+   it's the safe default. */
+export const goal = signal('custom');
+
 /* THEME — persisted to localStorage; the effect keeps <html data-theme> and
    storage in sync whenever the signal changes. */
 function readTheme() {

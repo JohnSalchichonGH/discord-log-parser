@@ -141,8 +141,12 @@
        STEP 2: CONFIGURE
        ═══════════════════════════════════════════════════════════════ -->
       <section class="panel" id="panel2">
+        <!-- "What are you making?" goal picker, rendered by Preact
+             (ui/views/GoalPicker.jsx). Drives which settings below are shown. -->
+        <div id="goal-picker"></div>
+
         <!-- Token Limit -->
-        <div class="panel-card">
+        <div class="panel-card ai-setting">
           <div class="card-title">
             <svg
               width="18"
@@ -327,7 +331,7 @@
         </div>
 
         <!-- Keyword Priority -->
-        <div class="panel-card">
+        <div class="panel-card ai-setting">
           <div class="card-title">
             <svg
               width="18"
@@ -412,7 +416,7 @@
         </div>
 
         <!-- System Prompt -->
-        <div class="panel-card">
+        <div class="panel-card ai-setting">
           <div class="card-title">
             <svg
               width="18"
