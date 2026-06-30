@@ -7,10 +7,12 @@
 //
 // This composer reads no signals, so it renders once and never re-renders — which
 // is what keeps the static host skeletons' renderer output from being wiped. The
-// Output Preview (Transcript) card stays in index.html, still driven by app.js.
+// reactive children (Summary/Technical/Transcript) read their own signals and
+// re-render independently, so they never touch the static skeletons.
 
 import { Summary } from './Summary.jsx';
 import { Technical } from './Technical.jsx';
+import { Transcript } from './Transcript.jsx';
 import { Insights } from './Insights.jsx';
 import { Calendar } from './Calendar.jsx';
 import { Wrapped } from './Wrapped.jsx';
@@ -19,10 +21,11 @@ export function ReviewPanels() {
   return (
     <>
       <Summary />
-      <Technical />
+      <Transcript />
       <Insights />
       <Wrapped />
       <Calendar />
+      <Technical />
     </>
   );
 }

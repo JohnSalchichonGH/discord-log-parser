@@ -1,18 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { h } from 'preact';
-import { render, fireEvent } from '@testing-library/preact';
-import { Header } from '../src/ui/views/Header.jsx';
-import { WizardSteps } from '../src/ui/views/WizardSteps.jsx';
-import { Configure } from '../src/ui/views/Configure.jsx';
-import { Upload } from '../src/ui/views/Upload.jsx';
-import { ReviewPanels } from '../src/ui/views/Review/ReviewPanels.jsx';
+import { fireEvent } from '@testing-library/preact';
 import { setSetting } from '../src/ui/settings.js';
 
-// Load the real markup, then import the controller. If any element the app wires
-// to is missing/renamed, the top-level getElementById bindings throw and this
-// test fails loudly — a cheap parity guard for the UI migration.
+// Load the real index.html shell (now just <div id="app">), then import the
+// bootstrap — it mounts the whole Preact app and starts the analytics host,
+// exactly as main.js does in the browser. If any element the app wires to is
+// missing/renamed, bootstrap throws and this test fails loudly — a cheap
+// end-to-end parity guard for the UI.
 beforeAll(async () => {
   const html = readFileSync(resolve(process.cwd(), 'src/index.html'), 'utf8');
   const body = html.slice(
@@ -22,24 +18,7 @@ beforeAll(async () => {
   document.documentElement.setAttribute('data-theme', 'dark');
   document.body.innerHTML = body;
   window.scrollTo = () => {}; // jsdom doesn't implement it; goToStep calls it
-  await import('../src/ui/app.js');
-  // The wizard stepper, Upload step, and Configure form are Preact-rendered
-  // (mount.jsx isn't imported here); render them as mount.jsx would.
-  render(h(WizardSteps, {}), {
-    container: document.getElementById('wizardNav'),
-  });
-  render(h(Upload, {}), {
-    container: document.getElementById('upload-files'),
-  });
-  render(h(Configure, {}), {
-    container: document.getElementById('configure-form'),
-  });
-  // The Review analytics cards (Summary/Technical + the host skeletons) are
-  // Preact-rendered too; render them as mount.jsx would. (We skip
-  // initAnalyticsHost here — this test only exercises the Summary stats chart.)
-  render(h(ReviewPanels, {}), {
-    container: document.getElementById('review-panels'),
-  });
+  await import('../src/ui/bootstrap.jsx');
 });
 
 describe('UI wiring smoke test', () => {
@@ -50,8 +29,8 @@ describe('UI wiring smoke test', () => {
   });
 
   it('binds the theme toggle (Preact Header click flips data-theme)', () => {
-    // The header + theme toggle are now rendered by Preact (store-owned theme).
-    render(h(Header, {}), { container: document.getElementById('app-header') });
+    // The header + theme toggle are rendered by Preact (store-owned theme) as
+    // part of the App shell that bootstrap mounted.
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
     document.querySelector('.theme-toggle').click();
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');

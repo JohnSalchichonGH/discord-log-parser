@@ -3,8 +3,9 @@
 The app is developed as plain ES modules under `src/` and bundled with Vite into a
 single, dependency-free `dist/index.html` (all JS, CSS and fonts inlined) so the
 "double-click to run, no server" experience is preserved. Parsing, processing,
-analytics and rendering live in small tested modules; `src/ui/app.js` is the thin
-DOM glue that wires them to the page.
+analytics and rendering live in small tested modules. The UI is a Preact +
+`@preact/signals` app (`src/ui/App.jsx`, mounted from `src/ui/bootstrap.jsx`) with
+a signals store (`src/ui/store.js`) as the single source of truth.
 
 ## Scripts
 
@@ -39,7 +40,7 @@ default file stays small.
 | `src/core/`     | grouping, pipeline, identity/dedup, chunking, `analytics.js`, `wrapped.js` stats, token estimation, time/format helpers |
 | `src/parsers/`  | JSON, HTML and TXT export parsers (parse once into format-independent raw messages)                                     |
 | `src/render/`   | TXT / JSON / Markdown / CSV renderers                                                                                   |
-| `src/ui/`       | `app.js` (DOM controller) + `insights.js`, `calendar.js`, `wrapped.js` visualizers                                      |
+| `src/ui/`       | Preact app (`App.jsx`, `bootstrap.jsx`, `views/**`, `components/**`), signals `store.js`/`settings.js`/`nav.js`, and the `insights.js`, `calendar.js`, `wrapped.js` visualizers |
 | `src/worker.js` | Web Worker: off-main-thread parse + pipeline + analytics (with a main-thread fallback)                                  |
 | `test/`         | Vitest suites + synthetic DiscordChatExporter fixtures                                                                  |
 

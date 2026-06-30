@@ -18,7 +18,6 @@ async function boot() {
     const { loadBpeCounter } = await import('./core/tokenizer-bpe.js');
     setAccurateLoader(loadBpeCounter);
   }
-  await import('./ui/app.js');
-  await import('./ui/mount.jsx'); // Preact-rendered shell (header, …)
+  await import('./ui/bootstrap.jsx'); // mounts the Preact shell into #app
 }
 boot();

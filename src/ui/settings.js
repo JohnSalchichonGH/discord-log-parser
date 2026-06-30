@@ -1,18 +1,12 @@
 // Settings state + persistence.
 //
-// The settings store is now the SOURCE OF TRUTH for the Configure step: the
-// Preact <Configure> controls read their values from `settings` and write back
-// with `setSetting()`. An effect persists the store to localStorage and
+// The settings store is the SOURCE OF TRUTH for the whole wizard: the Preact
+// <Configure> and <Export> controls read their values from `settings` and write
+// back with `setSetting()`. An effect persists the store to localStorage and
 // `applySavedSettings()` restores it on load. The processing/export code reads
 // the snapshot object instead of scattered getElementById calls.
-//
-// A few Export-step controls (panel4) are still legacy DOM, so `snapshotSettings`
-// reads those fresh from the DOM and merges them over the store — this hybrid is
-// removed when the Export view migrates to Preact.
 
 import { signal, effect } from '@preact/signals';
-
-const $ = (id) => document.getElementById(id);
 
 // Default values for every setting (mirrors the controls' initial values).
 // Strings where the control yields a string (number inputs read as `.value`),
@@ -39,14 +33,6 @@ export const DEFAULTS = {
   dateTo: '',
 };
 
-// Export-step controls still rendered as legacy DOM (panel4). [domId, key, prop].
-// Read fresh at snapshot time so they stay authoritative until Export migrates.
-const DOM_FIELDS = [
-  ['outputFormat', 'outputFormat', 'value'],
-  ['chunkOutput', 'chunkOutput', 'checked'],
-  ['chunkOverlap', 'chunkOverlap', 'value'],
-];
-
 const STORAGE_KEY = 'dlp-settings';
 
 // The reactive settings store. Empty until applySavedSettings()/snapshot runs;
@@ -66,20 +52,16 @@ export function setSetting(key, value) {
   settings.value = { ...settings.value, [key]: value };
 }
 
-// Return the current settings, merging in the still-legacy Export controls from
-// the DOM. The processing/export pipeline reads this.
+// Return the current settings merged over the defaults. The processing/export
+// pipeline reads this.
 export function snapshotSettings() {
   const s = { ...DEFAULTS, ...settings.value };
-  for (const [id, key, type] of DOM_FIELDS) {
-    const el = $(id);
-    if (el) s[key] = el[type];
-  }
   settings.value = s;
   return s;
 }
 
-// Load persisted values (over the defaults) into the store, and push the
-// still-legacy Export controls onto their inputs. Returns the merged settings.
+// Load persisted values (over the defaults) into the store. Returns the merged
+// settings so the caller can seed any signals mirrored from them.
 export function applySavedSettings() {
   let saved = {};
   try {
@@ -90,10 +72,6 @@ export function applySavedSettings() {
   const merged = { ...DEFAULTS };
   for (const k of Object.keys(DEFAULTS)) {
     if (k in saved && saved[k] != null) merged[k] = saved[k];
-  }
-  for (const [id, key, type] of DOM_FIELDS) {
-    const el = $(id);
-    if (el && merged[key] != null) el[type] = merged[key];
   }
   settings.value = merged;
   return merged;

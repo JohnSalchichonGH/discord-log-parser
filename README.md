@@ -171,9 +171,9 @@ display.
 The app is ES modules under `src/`, built into a single dependency-free
 `dist/index.html` (JS, CSS and fonts inlined) so the "double-click to run" file is
 preserved. All parsing/processing/analytics/rendering logic lives in tested,
-DOM-free modules; the UI is a small **Preact + Signals** layer (`src/ui/store.js`
-holds reactive state; `src/ui/views/*` and `src/ui/components/*` render it)
-coexisting with the legacy `src/ui/app.js` controller as it is migrated.
+DOM-free modules; the UI is a **Preact + Signals** app (`src/ui/App.jsx`, mounted
+from `src/ui/bootstrap.jsx`) where `src/ui/store.js` holds the reactive state and
+`src/ui/views/*` and `src/ui/components/*` render it.
 
 ```bash
 npm test            # Vitest suite (173 tests)

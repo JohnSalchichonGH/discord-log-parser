@@ -63,6 +63,11 @@ export const processing = signal({
    export confirmation can name it. */
 export const exportFormat = signal('txt');
 
+/* DOWNLOAD STATUS — the Export step's status line (e.g. "3 file(s) downloading…").
+   Written by the Export view's download handler, rendered by the Preact status
+   bar. Shape: { text, kind } where kind is '' | 'success' | 'error'. */
+export const downloadStatus = signal({ text: '', kind: '' });
+
 /* OUTPUT GOAL — "What are you making?" Drives which settings the Configure step
    shows (the AI/token controls collapse unless you're making compact text) and
    the default export format. 'custom' shows everything (the legacy behavior), so
@@ -70,8 +75,8 @@ export const exportFormat = signal('txt');
 export const goal = signal('custom');
 
 /* EXPLORE TAB — which analytics view is shown on the Review step. The cards
-   already exist in the DOM; app.js reflects this onto panel3[data-explore-tab]
-   and CSS shows just the active one. */
+   already exist in the DOM; ui/analytics-host.js reflects this onto
+   panel3[data-explore-tab] and CSS shows just the active one. */
 export const exploreTab = signal('summary');
 
 /* THEME — persisted to localStorage; the effect keeps <html data-theme> and

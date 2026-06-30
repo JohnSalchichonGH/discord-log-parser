@@ -1193,8 +1193,8 @@ textarea:focus-visible,
 }
 
 /* Review-step Explore tabs: reveal only the active analytics card. The
-   !important overrides the inline display:block app.js sets when a card has
-   data, so an empty (no-data) card still stays hidden. */
+   !important overrides the inline display:block ui/analytics-host.js sets when a
+   card has data, so an empty (no-data) card still stays hidden. */
 #explore-tabs {
   margin-bottom: 16px;
 }
