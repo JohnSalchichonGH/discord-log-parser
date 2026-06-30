@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { h } from 'preact';
+import { render } from '@testing-library/preact';
+import { Header } from '../src/ui/views/Header.jsx';
 
 // Load the real markup, then import the controller. If any element the app wires
 // to is missing/renamed, the top-level getElementById bindings throw and this
@@ -23,11 +26,13 @@ describe('UI wiring smoke test', () => {
     expect(document.querySelectorAll('.wizard-step')).toHaveLength(4);
   });
 
-  it('binds the theme toggle (click flips data-theme)', () => {
+  it('binds the theme toggle (Preact Header click flips data-theme)', () => {
+    // The header + theme toggle are now rendered by Preact (store-owned theme).
+    render(h(Header, {}), { container: document.getElementById('app-header') });
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-    document.getElementById('themeToggle').click();
+    document.querySelector('.theme-toggle').click();
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-    document.getElementById('themeToggle').click();
+    document.querySelector('.theme-toggle').click();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 

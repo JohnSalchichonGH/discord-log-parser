@@ -6,70 +6,9 @@
     <title>Discord Log Parser</title>
   </head>
   <body>
-    <!-- ═══════════════════════════════════════════════════════════════════
-     THEME TOGGLE
-     ═══════════════════════════════════════════════════════════════════ -->
-    <button
-      class="theme-toggle"
-      id="themeToggle"
-      type="button"
-      title="Toggle theme"
-      aria-label="Toggle light or dark theme"
-    >
-      <svg
-        id="themeIcon"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-      </svg>
-    </button>
-
     <div class="app-shell">
-      <!-- HEADER -->
-      <header class="app-header">
-        <div class="app-logo">
-          <svg
-            width="36"
-            height="36"
-            viewBox="0 0 36 36"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect width="36" height="36" rx="10" fill="url(#logoGrad)" />
-            <path
-              d="M11 14.5C11 14.5 13.5 12 18 12C22.5 12 25 14.5 25 14.5"
-              stroke="white"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-            <circle cx="14" cy="18" r="2" fill="white" />
-            <circle cx="22" cy="18" r="2" fill="white" />
-            <path
-              d="M13 22.5C13 22.5 15 24 18 24C21 24 23 22.5 23 22.5"
-              stroke="white"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-            <defs>
-              <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36">
-                <stop stop-color="#6c9eff" />
-                <stop offset="1" stop-color="#a78bfa" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <span class="app-title">Discord Log Parser</span>
-        </div>
-        <div class="app-subtitle">
-          Convert Discord exports into compact, LLM-optimized text
-        </div>
-      </header>
+      <!-- Header + theme toggle are rendered by Preact (ui/views/Header.jsx). -->
+      <div id="app-header"></div>
 
       <!-- WIZARD STEPS -->
       <nav class="wizard-steps" id="wizardNav" aria-label="Progress">

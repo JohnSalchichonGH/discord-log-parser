@@ -35,53 +35,14 @@ import {
   enableAccurate,
   disableAccurate,
 } from '../core/token-config.js';
-import DlpWorker from '../worker.js?worker&inline';
-
-/* WEB WORKER (off-thread parse + pipeline; graceful main-thread fallback) */
-let worker = null;
-let workerBroken = false;
-function getWorker() {
-  if (workerBroken) return null;
-  if (!worker && typeof Worker !== 'undefined') {
-    try {
-      worker = new DlpWorker();
-    } catch {
-      workerBroken = true;
-    }
-  }
-  return worker;
-}
-// One request/response round-trip; progress messages go to onProgress. Each
-// request carries a unique id and only reacts to replies with the matching id,
-// so concurrent setFiles/process calls can't resolve each other's promises.
-let workerReqId = 0;
-function workerRequest(w, message, onProgress) {
-  const id = ++workerReqId;
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      w.removeEventListener('message', onMsg);
-      w.removeEventListener('error', onErr);
-    };
-    const onMsg = (e) => {
-      const d = e.data;
-      if (d._id !== id) return; // a different request's reply
-      if (d.type === 'progress') return onProgress && onProgress(d);
-      cleanup();
-      if (d.type === 'error') reject(new Error(d.message));
-      else resolve(d);
-    };
-    const onErr = (e) => {
-      cleanup();
-      reject(new Error(e.message || 'worker error'));
-    };
-    w.addEventListener('message', onMsg);
-    w.addEventListener('error', onErr);
-    w.postMessage({ ...message, _id: id });
-  });
-}
-// lastModified disambiguates a re-export with the same name and byte size but
-// edited content, so the worker cache doesn't serve a stale parse.
-const fileKey = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+import {
+  getWorker,
+  workerRequest,
+  fileKey,
+  markWorkerBroken,
+} from './worker-client.js';
+import { theme } from './store.js';
+import { effect } from '@preact/signals';
 
 /* CONSTANTS */
 const BAR_COLORS = [
@@ -110,29 +71,14 @@ let botUsers = new Set(); // author names tagged as bots
 /* DOM REFS */
 const $ = (id) => document.getElementById(id);
 
-/* THEME */
-function initTheme() {
-  const saved = localStorage.getItem('dlp-theme');
-  if (saved) document.documentElement.setAttribute('data-theme', saved);
-  updateThemeIcon();
-}
-function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('dlp-theme', next);
-  updateThemeIcon();
-  // The Wrapped poster bakes in concrete theme colors, so re-render on toggle.
-  if ($('wrappedCard').style.display !== 'none') renderWrappedRecap();
-}
-function updateThemeIcon() {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  $('themeIcon').innerHTML = isDark
-    ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
-    : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
-}
-$('themeToggle').addEventListener('click', toggleTheme);
-initTheme();
+/* THEME — owned by the store (ui/store.js) and rendered by the Preact Header.
+   The Wrapped poster bakes in concrete theme colors, so re-render it whenever
+   the theme changes while it's visible. */
+effect(() => {
+  theme.value; // subscribe
+  const card = $('wrappedCard');
+  if (card && card.style.display !== 'none') renderWrappedRecap();
+});
 
 /* SETTINGS PERSISTENCE */
 function saveSettings() {
@@ -562,7 +508,7 @@ async function populateUserFilter(validFiles) {
       });
       entries = res.authors;
     } catch {
-      workerBroken = true;
+      markWorkerBroken();
       entries = inlineAuthors(validFiles);
     }
   } else {
@@ -805,7 +751,7 @@ async function computeOutputs(validFiles, opts, useAccurate) {
       });
       return { ...res, engine: 'worker' };
     } catch {
-      workerBroken = true; // fall through to inline
+      markWorkerBroken(); // fall through to inline
     }
   }
 
@@ -901,7 +847,7 @@ async function requestAnalytics(files, opts, tz) {
       });
       return res.stats;
     } catch {
-      workerBroken = true;
+      markWorkerBroken();
     }
   }
   const { filtered } = getFilteredMessages(files, opts);
@@ -927,7 +873,7 @@ async function requestMessages(files, opts) {
       });
       return { messages: res.messages, userMap: new Map(res.userMap) };
     } catch {
-      workerBroken = true;
+      markWorkerBroken();
     }
   }
   const { filtered, userMap } = getFilteredMessages(files, opts);
