@@ -1050,3 +1050,123 @@ textarea:focus-visible,
   opacity: 0.45;
   pointer-events: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN-SYSTEM PRIMITIVES (Preact components in ui/components/*)
+   Built on the tokens + .btn/.panel-card/.toggle-switch/.stat-card classes
+   above. Accessible replacements for the legacy click-a-div controls.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Accessible switch — a real <button role="switch"> reusing the .toggle-switch
+   visual via [data-on], so it stays in the focus order (the legacy .toggle-row
+   hides its checkbox with display:none). */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: none;
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+  color: inherit;
+  font: inherit;
+}
+.switch-row:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+}
+.switch-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.switch-row .toggle-switch[data-on='true'] {
+  background: var(--accent);
+}
+.switch-row .toggle-switch[data-on='true']::after {
+  transform: translateX(16px);
+}
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Tablist (WAI-ARIA tabs pattern). */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+.tab[data-active='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Collapsible section with a real <button aria-expanded> header. */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.disclosure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.disclosure-head:hover {
+  background: var(--bg-surface-hover);
+}
+.disclosure-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s var(--ease-out);
+  flex-shrink: 0;
+}
+.disclosure[data-open='true'] .disclosure-caret {
+  transform: rotate(90deg);
+}
+.disclosure-body {
+  padding: 14px;
+}
