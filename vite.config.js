@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import preact from '@preact/preset-vite';
 
 // Inject a strict CSP into the BUILT file only (a meta CSP in the dev HTML would
 // block Vite's HMR websocket). connect-src 'none' guarantees no data can leave
@@ -43,7 +44,7 @@ export default defineConfig(({ mode }) => {
   const accurate = mode === 'accurate';
   return {
     root: 'src',
-    plugins: [injectCsp(), viteSingleFile()],
+    plugins: [preact(), injectCsp(), viteSingleFile()],
     define: {
       // Build-time flag so the BPE tokenizer is dead-code-eliminated from the
       // lean build instead of merely lazy-loaded (single-file inlines chunks).

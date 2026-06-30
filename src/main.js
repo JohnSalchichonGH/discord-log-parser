@@ -19,5 +19,6 @@ async function boot() {
     setAccurateLoader(loadBpeCounter);
   }
   await import('./ui/app.js');
+  await import('./ui/_spike.jsx'); // PHASE 0 spike — removed in Phase 2
 }
 boot();

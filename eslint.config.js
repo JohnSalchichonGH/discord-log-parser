@@ -7,10 +7,12 @@ export default [
   js.configs.recommended,
   {
     // Browser app sources.
-    files: ['src/**/*.js'],
+    files: ['src/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
+      // Preact JSX (automatic runtime, so no React/h global is referenced).
+      parserOptions: { ecmaFeatures: { jsx: true } },
       globals: {
         ...globals.browser,
         // Build-time constant injected by Vite (see vite.config.js).
