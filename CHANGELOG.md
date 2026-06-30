@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pipeline.js` is no longer treated as a binary file by git/grep.** A stray NUL
+  byte (`\x00`) used as a separator in the content-bridge dedup key made tooling
+  classify the whole file as binary — `git diff`/`git blame` showed no line-level
+  changes and ripgrep skipped it. Replaced it with the tab delimiter already used
+  by the sibling dedup signature. No behavior change (the key is internal only).
+
 ## [1.2.0] - 2026-06-29
 
 ### Added
