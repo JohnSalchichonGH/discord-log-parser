@@ -49,6 +49,7 @@ import {
   goal,
   exploreTab,
 } from './store.js';
+import { snapshotSettings, applySavedSettings } from './settings.js';
 import { effect } from '@preact/signals';
 
 /* CONSTANTS */
@@ -87,65 +88,16 @@ effect(() => {
   if (card && card.style.display !== 'none') renderWrappedRecap();
 });
 
-/* SETTINGS PERSISTENCE */
-function saveSettings() {
-  try {
-    const s = {
-      maxTokens: $('maxTokens').value,
-      modelPreset: $('modelPreset').value,
-      filterLowActivity: $('filterLowActivity').checked,
-      minMessages: $('minMessages').value,
-      filterBots: $('filterBots').checked,
-      filterSystem: $('filterSystem').checked,
-      filterMediaOnly: $('filterMediaOnly').checked,
-      redactNames: $('redactNames').checked,
-      useRealNames: $('useRealNames').checked,
-      redactUrls: $('redactUrls').checked,
-      redactEmails: $('redactEmails').checked,
-      outputFormat: $('outputFormat').value,
-      chunkOutput: $('chunkOutput').checked,
-      chunkOverlap: $('chunkOverlap').value,
-      useAccurateTokens: $('useAccurateTokens').checked,
-      // E3: persist content fields so they survive a reload.
-      keywords: $('keywordInput').value,
-      preamble: $('customPreamble').value,
-      dateFrom: $('dateFrom').value,
-      dateTo: $('dateTo').value,
-    };
-    localStorage.setItem('dlp-settings', JSON.stringify(s));
-  } catch (e) {}
-}
-function loadSettings() {
-  try {
-    const s = JSON.parse(localStorage.getItem('dlp-settings'));
-    if (!s) return;
-    if (s.maxTokens) $('maxTokens').value = s.maxTokens;
-    if (s.modelPreset) $('modelPreset').value = s.modelPreset;
-    if (s.filterLowActivity)
-      $('filterLowActivity').checked = s.filterLowActivity;
-    if (s.minMessages) $('minMessages').value = s.minMessages;
-    if (s.filterBots) $('filterBots').checked = s.filterBots;
-    if (s.filterSystem) $('filterSystem').checked = s.filterSystem;
-    if (s.filterMediaOnly) $('filterMediaOnly').checked = s.filterMediaOnly;
-    if (s.redactNames) $('redactNames').checked = s.redactNames;
-    if (s.useRealNames) $('useRealNames').checked = s.useRealNames;
-    if (s.redactUrls) $('redactUrls').checked = s.redactUrls;
-    if (s.redactEmails) $('redactEmails').checked = s.redactEmails;
-    if (s.outputFormat) $('outputFormat').value = s.outputFormat;
-    if (s.chunkOutput) $('chunkOutput').checked = s.chunkOutput;
-    if (s.chunkOverlap) $('chunkOverlap').value = s.chunkOverlap;
-    if (s.useAccurateTokens)
-      $('useAccurateTokens').checked = s.useAccurateTokens;
-    if (s.keywords) $('keywordInput').value = s.keywords;
-    if (s.preamble) $('customPreamble').value = s.preamble;
-    if (s.dateFrom) $('dateFrom').value = s.dateFrom;
-    if (s.dateTo) $('dateTo').value = s.dateTo;
-    updateTokenLabel();
-    syncNameToggles(); // reflect any persisted real-names/anonymize state
-    exportFormat.value = $('outputFormat').value; // keep the store in sync
-    $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
-    $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
-  } catch (e) {}
+/* SETTINGS PERSISTENCE — state lives in the signals store (ui/settings.js).
+   Restore persisted values onto the inputs, then run the load-time side effects
+   the controls need. */
+function restoreSettings() {
+  const s = applySavedSettings();
+  updateTokenLabel();
+  syncNameToggles(); // reflect any persisted real-names/anonymize state
+  exportFormat.value = $('outputFormat').value; // keep the store in sync
+  $('minMsgRow').style.display = s.filterLowActivity ? 'block' : 'none';
+  $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
 }
 
 /* WIZARD NAVIGATION */
@@ -184,7 +136,7 @@ document.querySelectorAll('.wizard-step').forEach((s) => {
 
 $('toStep2').addEventListener('click', () => goToStep(2));
 $('toStep3').addEventListener('click', () => {
-  saveSettings();
+  snapshotSettings(); // capture + persist current settings
   goToStep(3);
 });
 $('toStep4').addEventListener('click', () => goToStep(4));
@@ -655,27 +607,20 @@ function runProcessing() {
       // Yield once so the "Processing…" status paints before any inline work.
       await new Promise((r) => setTimeout(r, 20));
 
-      const maxTokens = Math.max(
-        1000,
-        parseInt($('maxTokens').value) || 1375000,
-      );
+      const cfg = snapshotSettings();
+      const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
       const maxChars = maxTokens * 4;
-      const doFilter = $('filterLowActivity').checked;
-      const minMsgs = doFilter
-        ? Math.max(1, parseInt($('minMessages').value) || 10)
+      const minMsgs = cfg.filterLowActivity
+        ? Math.max(1, parseInt(cfg.minMessages) || 10)
         : 0;
       const userFilterCbs = [
         ...$('userFilterList').querySelectorAll('input:checked'),
       ].map((cb) => cb.value);
       const userFilter =
         userFilterCbs.length > 0 ? new Set(userFilterCbs) : null;
-      const dateFromVal = $('dateFrom').value
-        ? localDate($('dateFrom').value, false)
-        : null;
-      const dateToVal = $('dateTo').value
-        ? localDate($('dateTo').value, true)
-        : null;
-      const keywordsRaw = $('keywordInput').value.trim();
+      const dateFromVal = cfg.dateFrom ? localDate(cfg.dateFrom, false) : null;
+      const dateToVal = cfg.dateTo ? localDate(cfg.dateTo, true) : null;
+      const keywordsRaw = cfg.keywords.trim();
       const keywords = keywordsRaw
         ? keywordsRaw
             .split('\n')
@@ -690,22 +635,20 @@ function runProcessing() {
         maxTokens,
         maxChars,
         userFilter,
-        filterBots: $('filterBots').checked,
+        filterBots: cfg.filterBots,
         botSet: botUsers,
-        filterSystem: $('filterSystem').checked,
-        filterMediaOnly: $('filterMediaOnly').checked,
+        filterSystem: cfg.filterSystem,
+        filterMediaOnly: cfg.filterMediaOnly,
         dateFrom: dateFromVal,
         dateTo: dateToVal,
         keywords,
-        useRealNames: $('useRealNames').checked,
+        useRealNames: cfg.useRealNames,
       };
 
       fill.style.width = '40%';
 
       const validFiles = loadedFiles.filter((f) => !f.invalid);
-      const useAccurate = !!(
-        $('useAccurateTokens') && $('useAccurateTokens').checked
-      );
+      const useAccurate = !!cfg.useAccurateTokens;
       const { outputs, totalMessages, totalFiltered, totalKept, engine } =
         await computeOutputs(validFiles, opts, useAccurate);
       // Diagnostic: which path produced the result ('worker' or 'inline').
@@ -843,12 +786,13 @@ async function computeOutputs(validFiles, opts, useAccurate) {
 function renderPreview(idx) {
   const po = processedOutputs[idx];
   if (!po) return;
-  const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
+  const cfg = snapshotSettings();
+  const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
   const renderOpts = {
-    preamble: $('customPreamble').value,
-    redactNames: $('redactNames').checked,
-    redactUrls: $('redactUrls').checked,
-    redactEmails: $('redactEmails').checked,
+    preamble: cfg.preamble,
+    redactNames: cfg.redactNames,
+    redactUrls: cfg.redactUrls,
+    redactEmails: cfg.redactEmails,
   };
   const previewText = renderTxt(
     po.finalChunks,
@@ -1186,12 +1130,13 @@ $('copyPreview').addEventListener('click', () => {
   if (processedOutputs.length === 0) return;
   const idx = parseInt($('previewGroup').value) || 0;
   const po = processedOutputs[idx] || processedOutputs[0];
-  const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
+  const cfg = snapshotSettings();
+  const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
   const renderOpts = {
-    preamble: $('customPreamble').value,
-    redactNames: $('redactNames').checked,
-    redactUrls: $('redactUrls').checked,
-    redactEmails: $('redactEmails').checked,
+    preamble: cfg.preamble,
+    redactNames: cfg.redactNames,
+    redactUrls: cfg.redactUrls,
+    redactEmails: cfg.redactEmails,
   };
   const text = renderTxt(po.finalChunks, po.userMap, maxTokens, renderOpts);
   navigator.clipboard.writeText(text).then(() => {
@@ -1204,15 +1149,16 @@ $('copyPreview').addEventListener('click', () => {
 /* DOWNLOAD */
 $('downloadBtn').addEventListener('click', () => {
   if (processedOutputs.length === 0) return;
-  const format = $('outputFormat').value;
-  const maxTokens = Math.max(1000, parseInt($('maxTokens').value) || 1375000);
-  const doChunk = $('chunkOutput').checked;
-  const overlap = parseInt($('chunkOverlap').value) || 500;
+  const cfg = snapshotSettings();
+  const format = cfg.outputFormat;
+  const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
+  const doChunk = cfg.chunkOutput;
+  const overlap = parseInt(cfg.chunkOverlap) || 500;
   const renderOpts = {
-    preamble: $('customPreamble').value,
-    redactNames: $('redactNames').checked,
-    redactUrls: $('redactUrls').checked,
-    redactEmails: $('redactEmails').checked,
+    preamble: cfg.preamble,
+    redactNames: cfg.redactNames,
+    redactUrls: cfg.redactUrls,
+    redactEmails: cfg.redactEmails,
   };
 
   let dlCount = 0;
@@ -1319,5 +1265,5 @@ function downloadFile(content, filename) {
   URL.revokeObjectURL(url);
 }
 
-// Load saved settings on init
-loadSettings();
+// Restore saved settings on init
+restoreSettings();
