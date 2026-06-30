@@ -3,13 +3,7 @@
 // preserved verbatim from the legacy index.html; only the pure logic moved out.
 
 import { escHtml } from '../core/format.js';
-import { buildGroups } from '../core/grouping.js';
-import { localDate } from '../core/time.js';
-import {
-  processGroup,
-  getFilteredMessages,
-  buildIdentity,
-} from '../core/pipeline.js';
+import { getFilteredMessages } from '../core/pipeline.js';
 import { computeAnalytics } from '../core/analytics.js';
 import {
   renderInsights,
@@ -26,11 +20,7 @@ import { renderJSON } from '../render/json.js';
 import { renderMarkdown } from '../render/markdown.js';
 import { renderCSV } from '../render/csv.js';
 import { renderHTML } from '../render/html.js';
-import {
-  countTokens,
-  enableAccurate,
-  disableAccurate,
-} from '../core/token-config.js';
+import { countTokens } from '../core/token-config.js';
 import {
   getWorker,
   workerRequest,
@@ -39,17 +29,18 @@ import {
 } from './worker-client.js';
 import {
   theme,
-  exportSummary,
   exportFormat,
   goal,
   exploreTab,
   loadedFiles,
-  botUsers,
-  selectedUsers,
+  processedOutputs,
+  processResult,
+  insightContext,
 } from './store.js';
 import { settings, snapshotSettings, applySavedSettings } from './settings.js';
+import { runProcessing } from './processing.js';
 import { configureNav, goToStep } from './nav.js';
-import { effect } from '@preact/signals';
+import { effect, untracked } from '@preact/signals';
 
 /* CONSTANTS */
 const BAR_COLORS = [
@@ -70,10 +61,10 @@ const BAR_COLORS = [
   '#d088f0',
 ];
 
-/* STATE — loadedFiles, botUsers, and the user-filter selection now live in the
-   signals store (ui/store.js); the Preact Upload step + UserFilter render them,
-   and ui/files.js owns parsing/grouping. This controller still owns processing. */
-let processedOutputs = []; // { name, text, chunks, stats }
+/* STATE — loadedFiles, botUsers, the user-filter selection, and the processed
+   outputs/result now live in the signals store (ui/store.js). ui/processing.js
+   runs the pipeline and writes them; this controller renders the (still-legacy)
+   Review cards + handles preview/copy/download from those signals. */
 
 /* DOM REFS */
 const $ = (id) => document.getElementById(id);
@@ -158,214 +149,77 @@ effect(() => {
   if (panel) panel.dataset.exploreTab = exploreTab.value;
 });
 
-// Resolve once the selected token counter is loaded (BPE load is async). The
-// accurate toggle lives in the Preact Configure form (it calls enable/disable
-// eagerly so the counter is ready by preview time); this guards the processing
-// path against the store's current value.
-function ensureCounterReady() {
-  if (settings.value.useAccurateTokens) return enableAccurate();
-  disableAccurate();
-  return Promise.resolve();
-}
+// Enable "Continue to Export" once a run has produced a result — including an
+// empty one (the user may still want to inspect/export nothing). processResult
+// is reset to null while a run is in flight and stays null if the run threw, so
+// it's disabled in exactly those two cases (matching the legacy behavior).
+effect(() => {
+  const btn = $('toStep4');
+  if (btn) btn.disabled = processResult.value === null;
+});
 
-/* PROCESSING PIPELINE */
-function runProcessing() {
-  const statusEl = $('processStatus');
-  statusEl.textContent = 'Processing…';
-  statusEl.className = 'status-bar';
-  $('statsCard').style.display = 'none';
-  $('budgetCard').style.display = 'none';
-  $('previewCard').style.display = 'none';
-  $('insightsCard').style.display = 'none';
-  $('toStep4').disabled = true;
-
-  const progress = $('processProgress');
-  const fill = $('progressFill');
-  progress.classList.add('active');
-  fill.style.width = '10%';
-
-  // Ensure the selected token counter (approx or accurate BPE) is loaded first.
-  ensureCounterReady()
-    .then(async () => {
-      // Yield once so the "Processing…" status paints before any inline work.
-      await new Promise((r) => setTimeout(r, 20));
-
-      const cfg = snapshotSettings();
-      const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
-      const maxChars = maxTokens * 4;
-      const minMsgs = cfg.filterLowActivity
-        ? Math.max(1, parseInt(cfg.minMessages) || 10)
-        : 0;
-      // Selected author names from the Preact user filter (empty = everyone).
-      const userFilter =
-        selectedUsers.value.size > 0 ? new Set(selectedUsers.value) : null;
-      const dateFromVal = cfg.dateFrom ? localDate(cfg.dateFrom, false) : null;
-      const dateToVal = cfg.dateTo ? localDate(cfg.dateTo, true) : null;
-      const keywordsRaw = cfg.keywords.trim();
-      const keywords = keywordsRaw
-        ? keywordsRaw
-            .split('\n')
-            .map((l) => l.trim())
-            .filter(Boolean)
-        : [];
-
-      // opts must be structured-cloneable (no functions) so it can post to the
-      // worker; the counter is injected separately on each side.
-      const opts = {
-        minMsgs,
-        maxTokens,
-        maxChars,
-        userFilter,
-        filterBots: cfg.filterBots,
-        botSet: botUsers.value,
-        filterSystem: cfg.filterSystem,
-        filterMediaOnly: cfg.filterMediaOnly,
-        dateFrom: dateFromVal,
-        dateTo: dateToVal,
-        keywords,
-        useRealNames: cfg.useRealNames,
-      };
-
-      fill.style.width = '40%';
-
-      const validFiles = loadedFiles.value.filter((f) => !f.invalid);
-      const useAccurate = !!cfg.useAccurateTokens;
-      const { outputs, totalMessages, totalFiltered, totalKept, engine } =
-        await computeOutputs(validFiles, opts, useAccurate);
-      // Diagnostic: which path produced the result ('worker' or 'inline').
-      statusEl.dataset.engine = engine;
-
-      processedOutputs = outputs;
-      // Feed the Preact export confirmation (complete vs trimmed).
-      exportSummary.value =
-        totalMessages > 0
-          ? {
-              kept: totalKept,
-              total: totalMessages,
-              budgetExceeded: outputs.some((o) => o.budgetExceeded),
-            }
-          : null;
-      const allFinalChunks = [];
-      const allUserMap = new Map();
-      for (const po of outputs) {
-        for (const c of po.finalChunks) allFinalChunks.push(c);
-        for (const [k, v] of po.userMap) allUserMap.set(k, v);
-      }
-
-      fill.style.width = '75%';
-
-      renderStats(
-        totalMessages,
-        totalFiltered,
-        totalKept,
-        allFinalChunks,
-        allUserMap,
-      );
-
-      if (processedOutputs.length > 0) {
-        // B6: let the user preview/copy any channel group, not just the first.
-        const sel = $('previewGroup');
-        sel.innerHTML = processedOutputs
-          .map((po, i) => `<option value="${i}">${escHtml(po.name)}</option>`)
-          .join('');
-        sel.style.display = processedOutputs.length > 1 ? '' : 'none';
-        sel.value = '0';
-        renderPreview(0);
-        $('previewCard').style.display = 'block';
-      }
-
-      // Insights dashboard (analytics over the full filtered conversation).
-      insightFiles = validFiles;
-      insightBaseOpts = opts;
-      if (totalMessages > 0) {
-        $('insightsCard').style.display = 'block';
-        loadInsights();
-      }
-
-      fill.style.width = '100%';
-      setTimeout(() => {
-        progress.classList.remove('active');
-        fill.style.width = '0%';
-      }, 600);
-      if (totalMessages === 0) {
-        // E2: a silent empty result usually means the parser couldn't read the
-        // export (e.g. a non-US locale broke HTML/TXT date parsing). Say so.
-        statusEl.textContent =
-          'No messages found. If these are non-US-locale .html/.txt exports, re-export as JSON (timestamps are locale-independent).';
-        statusEl.className = 'status-bar error';
-      } else if (outputs.some((o) => o.budgetExceeded)) {
-        // Keyword-priority messages alone exceed the budget; they are all kept,
-        // so the output is larger than the selected limit.
-        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} → ${totalKept.toLocaleString()} kept — ⚠ priority messages exceed the token budget (output is larger than the limit).`;
-        statusEl.className = 'status-bar';
-      } else {
-        statusEl.textContent = `Processed ${totalMessages.toLocaleString()} messages → ${totalKept.toLocaleString()} kept`;
-        statusEl.className = 'status-bar success';
-      }
-      $('toStep4').disabled = false;
-    })
-    .catch((err) => {
-      console.error(err);
-      statusEl.textContent = 'Error: ' + err.message;
-      statusEl.className = 'status-bar error';
-      progress.classList.remove('active');
-    });
-}
-
-// Run the parse + pipeline off-thread in the worker when possible (B3b), falling
-// back to the main thread. The accurate-token path always runs inline (the
-// worker is approx-only). Returns { outputs, totalMessages, totalFiltered,
-// totalKept } with outputs[].finalChunks (Date timestamps) + userMap (Map)
-// preserved by structured clone.
-async function computeOutputs(validFiles, opts, useAccurate) {
-  const w = !useAccurate ? getWorker() : null;
-  if (w) {
-    try {
-      const res = await workerRequest(w, {
-        type: 'process',
-        fileMeta: validFiles.map((f) => ({
-          key: fileKey(f),
-          channelId: f.channelId,
-          baseName: f.baseName,
-          sortOrder: f.sortOrder,
-          afterDate: f.afterDate,
-        })),
-        opts,
-      });
-      return { ...res, engine: 'worker' };
-    } catch {
-      markWorkerBroken(); // fall through to inline
+/* LEGACY REVIEW RENDER — ui/processing.js runs the pipeline and writes the
+   result to the store (processedOutputs/processResult/insightContext, all in one
+   batch). This effect reflects it onto the still-legacy Review cards (stats,
+   budget, preview, insights); Phase 6 moves these to Preact. processResult is
+   null while a run is in flight, which hides the cards. Only processedOutputs is
+   a tracked dependency — the rest runs untracked so a later settings change (the
+   render helpers read settings.value) can't re-trigger a full re-render. */
+effect(() => {
+  processedOutputs.value; // the trigger
+  untracked(() => {
+    const outputs = processedOutputs.value;
+    const result = processResult.value;
+    if (!result) {
+      $('statsCard').style.display = 'none';
+      $('budgetCard').style.display = 'none';
+      $('previewCard').style.display = 'none';
+      $('insightsCard').style.display = 'none';
+      return;
     }
-  }
+    const { totalMessages, totalFiltered, totalKept } = result;
+    const allFinalChunks = [];
+    const allUserMap = new Map();
+    for (const po of outputs) {
+      for (const c of po.finalChunks) allFinalChunks.push(c);
+      for (const [k, v] of po.userMap) allUserMap.set(k, v);
+    }
+    renderStats(
+      totalMessages,
+      totalFiltered,
+      totalKept,
+      allFinalChunks,
+      allUserMap,
+    );
 
-  const groups = buildGroups(validFiles);
-  const fullOpts = { ...opts, countTokens };
-  // One global identity across all files (matches the worker path).
-  const identity = buildIdentity(validFiles, fullOpts.useRealNames);
-  const outputs = [];
-  let totalMessages = 0,
-    totalFiltered = 0,
-    totalKept = 0;
-  for (const [, arr] of groups) {
-    const r = processGroup(arr, fullOpts, identity);
-    totalMessages += r.allMessagesCount;
-    totalFiltered += r.filteredCount;
-    totalKept += r.finalChunks.length;
-    outputs.push({
-      name: arr[0].baseName,
-      finalChunks: r.finalChunks,
-      userMap: r.userMap,
-      totalRaw: r.allMessagesCount,
-      filteredCount: r.filteredCount,
-      budgetExceeded: r.budgetExceeded,
-    });
-  }
-  return { outputs, totalMessages, totalFiltered, totalKept, engine: 'inline' };
-}
+    if (outputs.length > 0) {
+      // B6: let the user preview/copy any channel group, not just the first.
+      const sel = $('previewGroup');
+      sel.innerHTML = outputs
+        .map((po, i) => `<option value="${i}">${escHtml(po.name)}</option>`)
+        .join('');
+      sel.style.display = outputs.length > 1 ? '' : 'none';
+      sel.value = '0';
+      renderPreview(0);
+      $('previewCard').style.display = 'block';
+    }
+
+    // Insights dashboard (analytics over the full filtered conversation).
+    const ctx = insightContext.value;
+    if (ctx) {
+      insightFiles = ctx.files;
+      insightBaseOpts = ctx.opts;
+    }
+    if (totalMessages > 0) {
+      $('insightsCard').style.display = 'block';
+      loadInsights();
+    }
+  });
+});
 
 // Render the live preview for one processed channel group (B6).
 function renderPreview(idx) {
-  const po = processedOutputs[idx];
+  const po = processedOutputs.value[idx];
   if (!po) return;
   const cfg = snapshotSettings();
   const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
@@ -708,9 +562,10 @@ function renderStats(totalRaw, totalFiltered, totalKept, chunks, userMap) {
 
 /* COPY PREVIEW */
 $('copyPreview').addEventListener('click', () => {
-  if (processedOutputs.length === 0) return;
+  const outputs = processedOutputs.value;
+  if (outputs.length === 0) return;
   const idx = parseInt($('previewGroup').value) || 0;
-  const po = processedOutputs[idx] || processedOutputs[0];
+  const po = outputs[idx] || outputs[0];
   const cfg = snapshotSettings();
   const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
   const renderOpts = {
@@ -729,7 +584,8 @@ $('copyPreview').addEventListener('click', () => {
 
 /* DOWNLOAD */
 $('downloadBtn').addEventListener('click', () => {
-  if (processedOutputs.length === 0) return;
+  const outputs = processedOutputs.value;
+  if (outputs.length === 0) return;
   const cfg = snapshotSettings();
   const format = cfg.outputFormat;
   const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
@@ -744,7 +600,7 @@ $('downloadBtn').addEventListener('click', () => {
 
   let dlCount = 0;
 
-  for (const po of processedOutputs) {
+  for (const po of outputs) {
     if (doChunk) {
       const chunks = chunkMessages(po.finalChunks, maxTokens, overlap);
       chunks.forEach((chunkMsgs, i) => {

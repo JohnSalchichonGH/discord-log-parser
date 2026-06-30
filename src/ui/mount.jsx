@@ -10,6 +10,7 @@ import { ExploreTabs } from './views/ExploreTabs.jsx';
 import { WizardSteps } from './views/WizardSteps.jsx';
 import { Configure } from './views/Configure.jsx';
 import { Upload } from './views/Upload.jsx';
+import { ProcessProgress, ProcessStatus } from './views/ProcessProgress.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
@@ -35,3 +36,11 @@ if (exploreHost) render(<ExploreTabs />, exploreHost);
 // Configure step (its Filters card renders the user filter from the store).
 const configureHost = document.getElementById('configure-form');
 if (configureHost) render(<Configure />, configureHost);
+
+// Review step: the processing progress bar (top) + status line (bottom), bound
+// to the `processing` signal that ui/processing.js writes.
+const progressHost = document.getElementById('process-progress');
+if (progressHost) render(<ProcessProgress />, progressHost);
+
+const statusHost = document.getElementById('process-status');
+if (statusHost) render(<ProcessStatus />, statusHost);

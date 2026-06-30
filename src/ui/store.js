@@ -34,6 +34,31 @@ export const parseSummary = signal(null);
    Null until a run has produced outputs. Shape: { kept, total, budgetExceeded }. */
 export const exportSummary = signal(null);
 
+/* PROCESSING — owned by ui/processing.js (runProcessing/computeOutputs), which
+   reads files/settings from the store and writes the result here; no direct DOM.
+   - processedOutputs: [{ name, finalChunks, userMap, totalRaw, filteredCount,
+     budgetExceeded }] — one per channel group. Read by the legacy preview/copy/
+     download handlers and (until Phase 6) the legacy Review renders.
+   - processResult: { totalMessages, totalFiltered, totalKept } | null — the run
+     totals the legacy renderStats needs; null while no run has completed (or has
+     just been reset at the start of a run, which hides the Review cards).
+   - insightContext: { files, opts } | null — the valid files + pipeline opts the
+     analytics dashboard re-runs over (still legacy DOM, hosted until Phase 6).
+   - processing: { active, pct, status, kind, engine } — drives the Preact
+     progress bar + status view (ui/views/ProcessProgress.jsx). `kind` is
+     '' | 'success' | 'error' (status-bar class); `engine` is the diagnostic
+     'worker' | 'inline'. */
+export const processedOutputs = signal([]);
+export const processResult = signal(null);
+export const insightContext = signal(null);
+export const processing = signal({
+  active: false,
+  pct: 0,
+  status: '',
+  kind: '',
+  engine: '',
+});
+
 /* The currently selected output format, mirrored from the format <select> so the
    export confirmation can name it. */
 export const exportFormat = signal('txt');

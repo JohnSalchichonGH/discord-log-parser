@@ -94,9 +94,9 @@
        STEP 3: PREVIEW & STATS
        ═══════════════════════════════════════════════════════════════ -->
       <section class="panel" id="panel3">
-        <div class="progress-bar" id="processProgress">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
+        <!-- Processing progress bar, rendered by Preact
+             (ui/views/ProcessProgress.jsx) from the `processing` signal. -->
+        <div id="process-progress"></div>
 
         <!-- Explore tab bar, rendered by Preact (ui/views/ExploreTabs.jsx);
              switches which card below is shown via panel3[data-explore-tab]. -->
@@ -433,12 +433,9 @@
           </div>
         </div>
 
-        <div
-          class="status-bar"
-          id="processStatus"
-          role="status"
-          aria-live="polite"
-        ></div>
+        <!-- Processing status line, rendered by Preact
+             (ui/views/ProcessProgress.jsx) from the `processing` signal. -->
+        <div id="process-status"></div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════
