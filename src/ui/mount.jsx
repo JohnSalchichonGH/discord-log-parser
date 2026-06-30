@@ -7,9 +7,13 @@ import { ParseSummary } from './views/ParseSummary.jsx';
 import { ExportSummary } from './views/ExportSummary.jsx';
 import { GoalPicker } from './views/GoalPicker.jsx';
 import { ExploreTabs } from './views/ExploreTabs.jsx';
+import { WizardSteps } from './views/WizardSteps.jsx';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
+
+const wizardHost = document.getElementById('wizardNav');
+if (wizardHost) render(<WizardSteps />, wizardHost);
 
 const summaryHost = document.getElementById('parse-summary');
 if (summaryHost) render(<ParseSummary />, summaryHost);

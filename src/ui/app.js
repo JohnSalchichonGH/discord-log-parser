@@ -50,6 +50,7 @@ import {
   exploreTab,
 } from './store.js';
 import { snapshotSettings, applySavedSettings } from './settings.js';
+import { configureNav, goToStep } from './nav.js';
 import { effect } from '@preact/signals';
 
 /* CONSTANTS */
@@ -100,38 +101,11 @@ function restoreSettings() {
   $('chunkOptions').style.display = s.chunkOutput ? 'block' : 'none';
 }
 
-/* WIZARD NAVIGATION */
-let currentStep = 1;
-function goToStep(n) {
-  if (n < 1 || n > 4) return;
-  if (n > 1 && !loadedFiles.length) return;
-  if (n > currentStep + 1) return; // can't skip forward
-
-  document
-    .querySelectorAll('.panel')
-    .forEach((p) => p.classList.remove('active'));
-  $('panel' + n).classList.add('active');
-
-  document.querySelectorAll('.wizard-step').forEach((s) => {
-    const sn = parseInt(s.dataset.step);
-    s.classList.remove('active', 'completed');
-    if (sn === n) s.classList.add('active');
-    else if (sn < n) s.classList.add('completed');
-    if (sn === n) s.setAttribute('aria-current', 'step');
-    else s.removeAttribute('aria-current');
-  });
-
-  currentStep = n;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  if (n === 3) runProcessing();
-}
-
-document.querySelectorAll('.wizard-step').forEach((s) => {
-  s.addEventListener('click', () => {
-    const sn = parseInt(s.dataset.step);
-    if (s.classList.contains('completed')) goToStep(sn);
-  });
+/* WIZARD NAVIGATION — the step signal + goToStep live in ui/nav.js (rendered by
+   the Preact stepper). Inject this controller's two dependencies. */
+configureNav({
+  canAdvance: () => loadedFiles.length > 0,
+  onEnterReview: () => runProcessing(),
 });
 
 $('toStep2').addEventListener('click', () => goToStep(2));

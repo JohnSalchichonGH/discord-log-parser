@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { h } from 'preact';
 import { render } from '@testing-library/preact';
 import { Header } from '../src/ui/views/Header.jsx';
+import { WizardSteps } from '../src/ui/views/WizardSteps.jsx';
 
 // Load the real markup, then import the controller. If any element the app wires
 // to is missing/renamed, the top-level getElementById bindings throw and this
@@ -16,7 +17,12 @@ beforeAll(async () => {
   );
   document.documentElement.setAttribute('data-theme', 'dark');
   document.body.innerHTML = body;
+  window.scrollTo = () => {}; // jsdom doesn't implement it; goToStep calls it
   await import('../src/ui/app.js');
+  // The wizard stepper is now Preact-rendered (mount.jsx isn't imported here).
+  render(h(WizardSteps, {}), {
+    container: document.getElementById('wizardNav'),
+  });
 });
 
 describe('UI wiring smoke test', () => {
