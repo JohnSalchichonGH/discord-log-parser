@@ -7,6 +7,7 @@ import { Header } from '../src/ui/views/Header.jsx';
 import { WizardSteps } from '../src/ui/views/WizardSteps.jsx';
 import { Configure } from '../src/ui/views/Configure.jsx';
 import { Upload } from '../src/ui/views/Upload.jsx';
+import { ReviewPanels } from '../src/ui/views/Review/ReviewPanels.jsx';
 import { setSetting } from '../src/ui/settings.js';
 
 // Load the real markup, then import the controller. If any element the app wires
@@ -32,6 +33,12 @@ beforeAll(async () => {
   });
   render(h(Configure, {}), {
     container: document.getElementById('configure-form'),
+  });
+  // The Review analytics cards (Summary/Technical + the host skeletons) are
+  // Preact-rendered too; render them as mount.jsx would. (We skip
+  // initAnalyticsHost here — this test only exercises the Summary stats chart.)
+  render(h(ReviewPanels, {}), {
+    container: document.getElementById('review-panels'),
   });
 });
 
@@ -132,10 +139,12 @@ describe('UI wiring smoke test', () => {
     setSetting('filterLowActivity', false); // keep the 1-msg user
     document.getElementById('toStep2').click();
     document.getElementById('toStep3').click();
-    await waitFor(
-      () => document.getElementById('statsCard').style.display === 'block',
-      4000,
-    );
+    // The Summary card is Preact-rendered, so it appears (with the user bar
+    // chart) once processing writes processResult — wait for that chart.
+    await waitFor(() => {
+      const chart = document.getElementById('userChart');
+      return chart && chart.querySelector('.chart-bar-label');
+    }, 4000);
 
     const chartHtml = document.getElementById('userChart').innerHTML;
     expect(window.__xss).toBeUndefined();

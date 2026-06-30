@@ -11,6 +11,8 @@ import { WizardSteps } from './views/WizardSteps.jsx';
 import { Configure } from './views/Configure.jsx';
 import { Upload } from './views/Upload.jsx';
 import { ProcessProgress, ProcessStatus } from './views/ProcessProgress.jsx';
+import { ReviewPanels } from './views/Review/ReviewPanels.jsx';
+import { initAnalyticsHost } from './analytics-host.js';
 
 const headerHost = document.getElementById('app-header');
 if (headerHost) render(<Header />, headerHost);
@@ -44,3 +46,12 @@ if (progressHost) render(<ProcessProgress />, progressHost);
 
 const statusHost = document.getElementById('process-status');
 if (statusHost) render(<ProcessStatus />, statusHost);
+
+// Review step: the Summary/Technical cards + the static host skeletons for the
+// insights/calendar/wrapped renderers. Render them first, THEN init the analytics
+// host so every getElementById target it wires already exists in the DOM.
+const reviewHost = document.getElementById('review-panels');
+if (reviewHost) {
+  render(<ReviewPanels />, reviewHost);
+  initAnalyticsHost();
+}
