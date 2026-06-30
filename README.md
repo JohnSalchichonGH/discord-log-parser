@@ -41,14 +41,16 @@ media collapsed to tokens, reactions and replies inlined.
 [3:50 AM] U1:
   Joined the server.
   greetings
+
 [+0s] U2:
   yo you guys
   stop deleting servers for crying out loud
 
 === SESSION BREAK (4h 12m) ===
 
-[8:14 AM] U1:
-  [IMG: eyechart.jpg] ^{👍:3}
+[8:02 AM] U1:
+  [IMG: eyechart.jpg]
+  ^{👍:3}
 ```
 
 ---
