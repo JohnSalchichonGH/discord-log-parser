@@ -3,14 +3,19 @@
 [![CI](https://github.com/JohnSalchichonGH/discord-log-parser/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnSalchichonGH/discord-log-parser/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/JohnSalchichonGH/discord-log-parser/graph/badge.svg)](https://codecov.io/gh/JohnSalchichonGH/discord-log-parser)
 
-Two tools in one for Discord chat exports — and both run entirely in your browser
-as a single self-contained HTML file (no server, no uploads, **zero** network
-requests):
+A private, local workspace for Discord chat exports. Merge messy exports into one
+clean conversation, then **export** it — a readable **HTML archive**, compact
+**LLM-ready text**, or **JSON/CSV** — or **explore** it with an activity
+dashboard, a heat calendar you can read like a chat, a reply network, and a
+shareable "Wrapped" recap.
 
-- **Convert** a noisy export into compact, **LLM-ready text** that packs as much
-  conversation as possible into a context window.
-- **Explore** it visually — an activity dashboard, a heat calendar you can read
-  like a chat, a reply network, and a shareable "Wrapped" recap.
+Everything runs in your browser as a single self-contained HTML file: no server,
+no uploads, **zero** network requests.
+
+A guided flow — **Upload → Configure → Review → Export** — shows what it found
+(_"48,392 messages · 17 participants · 5 files merged"_), asks **what you're
+making** so you only see the settings that matter, and states up front whether
+your export is complete or trimmed.
 
 Built from `.json`, `.html`, and `.txt` exports produced by
 [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) — mix all
@@ -50,8 +55,9 @@ media collapsed to tokens, reactions and replies inlined.
 
 ## Explore → read &amp; understand the log
 
-All computed over the full conversation (before token trimming), off the main
-thread, with a **UTC / Local** timezone toggle.
+On the **Review** step these live in tabs — Summary / Transcript / Insights /
+Calendar / Wrapped / Technical. All computed over the full conversation (before
+token trimming), off the main thread, with a **UTC / Local** timezone toggle.
 
 **Insights dashboard** — totals, activity over time, a day×hour heatmap,
 leaderboards, top reactions and media, with a live per-user filter.
@@ -84,8 +90,9 @@ npm install && npm run dev   # dev server with hot reload
 npm run build                # → dist/index.html  (fully self-contained)
 ```
 
-Then walk the four steps: **Upload** exports → **Configure** budget/filters →
-**Preview** (output + all the analytics above) → **Export**.
+Then walk the four steps: **Upload** exports → **Configure** (pick what you're
+making; budget/filters) → **Review** (output preview + all the analytics above,
+in tabs) → **Export**.
 
 ---
 
@@ -161,13 +168,15 @@ display.
 
 ## Development
 
-The app is plain ES modules under `src/`, built into a single dependency-free
+The app is ES modules under `src/`, built into a single dependency-free
 `dist/index.html` (JS, CSS and fonts inlined) so the "double-click to run" file is
-preserved. All parsing/processing/analytics/rendering logic lives in tested modules;
-`src/ui/*.js` is the DOM/visualization layer.
+preserved. All parsing/processing/analytics/rendering logic lives in tested,
+DOM-free modules; the UI is a small **Preact + Signals** layer (`src/ui/store.js`
+holds reactive state; `src/ui/views/*` and `src/ui/components/*` render it)
+coexisting with the legacy `src/ui/app.js` controller as it is migrated.
 
 ```bash
-npm test            # Vitest suite (154 tests)
+npm test            # Vitest suite (173 tests)
 npm run coverage    # tests + V8 coverage (lcov/html)
 npm run lint        # ESLint   ·   npm run format  (Prettier)
 npm run build:all   # both builds: lean + accurate-tokenizer
