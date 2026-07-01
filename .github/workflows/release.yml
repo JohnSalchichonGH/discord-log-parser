@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags, so we can link the previous release
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -22,9 +24,29 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build:all
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            index($0, "## [" ver "]") == 1 { found=1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::No CHANGELOG.md section found for version $version" >&2
+            exit 1
+          fi
+          repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          prev="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          if [ -n "$prev" ]; then
+            printf '\n**Full Changelog**: %s/compare/%s...%s\n' "$repo_url" "$prev" "$GITHUB_REF_NAME" >> RELEASE_NOTES.md
+          else
+            printf '\n**Full Changelog**: %s/commits/%s\n' "$repo_url" "$GITHUB_REF_NAME" >> RELEASE_NOTES.md
+          fi
+          echo "----- release notes -----"; cat RELEASE_NOTES.md
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/index.html
             dist/index-accurate.html
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
