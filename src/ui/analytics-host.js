@@ -122,19 +122,32 @@ async function requestMessages(files, opts) {
 // names are unreliable across merged files where a user can appear under
 // different nicknames.
 function selectedInsightUserIds() {
-  const boxes = [...$('insightUserList').querySelectorAll('input:checked')];
-  return boxes.length ? new Set(boxes.map((b) => b.value)) : null;
+  const all = $('insightUserList').querySelectorAll('input');
+  const checked = [...all].filter((b) => b.checked);
+  // None or all selected → no filter (and no needless recompute); only a partial
+  // selection actually filters the charts.
+  if (checked.length === 0 || checked.length === all.length) return null;
+  return new Set(checked.map((b) => b.value));
+}
+
+// Toggle the "crunching the numbers…" indicator while analytics compute (the
+// worker round-trip can take a couple of seconds on a large conversation).
+function setInsightBusy(on) {
+  const el = $('insightBusy');
+  if (el) el.hidden = !on;
 }
 
 // Initial load (and after reprocessing): compute the full analytics, populate
 // the user list, then render the (unfiltered) view + network.
 async function loadInsights() {
   if (!insightFiles.length || !insightBaseOpts) return null;
+  setInsightBusy(true);
   insightFull = await requestAnalytics(
     insightFiles,
     insightBaseOpts,
     insightTz,
   );
+  setInsightBusy(false);
   if (insightFull) {
     resetNetView(); // fresh dataset → start the network at default zoom/pan
     populateInsightUserList(insightFull.users);
@@ -172,21 +185,26 @@ function renderWrappedRecap() {
 async function refreshView() {
   if (!insightFull) return null;
   const ids = selectedInsightUserIds();
-  // No filter → reuse the full analytics (avoids a redundant recompute).
-  const view = ids
-    ? await requestAnalytics(
-        insightFiles,
-        { ...insightBaseOpts, userFilterIds: ids },
-        insightTz,
-      )
-    : insightFull;
-  if (view) renderInsights(view);
   const focusId = ids && ids.size === 1 ? [...ids][0] : null;
-  // The network/partners always reflect the full conversation. Hide the whole
-  // section (header included) when there are no reply relationships to graph.
+  // Highlight the focused user in the network + partners FIRST — this reads the
+  // already-computed full analytics, so clicking a node reacts instantly instead
+  // of waiting on the (possibly slow) per-user chart recompute below.
   const hasNetwork = renderNetwork(insightFull, focusId, focusUser);
   $('insightNetworkSection').style.display = hasNetwork ? 'block' : 'none';
   renderPartners(insightFull, focusId);
+  // Main charts: reuse the full analytics when unfiltered, else recompute for the
+  // selection (a worker round-trip) with the busy indicator up.
+  let view = insightFull;
+  if (ids) {
+    setInsightBusy(true);
+    view = await requestAnalytics(
+      insightFiles,
+      { ...insightBaseOpts, userFilterIds: ids },
+      insightTz,
+    );
+    setInsightBusy(false);
+  }
+  if (view) renderInsights(view);
   return view;
 }
 
@@ -220,11 +238,13 @@ async function setInsightTz(tz) {
   $('tzLocal').className =
     'btn ' + (tz === 'local' ? 'btn-primary' : 'btn-secondary');
   // Recompute the full analytics under the new timezone, preserving selections.
+  setInsightBusy(true);
   insightFull = await requestAnalytics(
     insightFiles,
     insightBaseOpts,
     insightTz,
   );
+  setInsightBusy(false);
   await refreshView();
   setCalendarTz(insightTz); // re-bucket the explorer's days/hours
   renderWrappedRecap(); // peak-hour persona / busiest day depend on the tz

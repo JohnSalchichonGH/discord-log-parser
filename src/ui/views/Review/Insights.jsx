@@ -38,6 +38,10 @@ export function Insights() {
         low-activity cutoff — so counts here can exceed the exported total.
       </div>
 
+      <div id="insightBusy" class="load-indicator" hidden>
+        <span class="spinner" /> Crunching the numbers…
+      </div>
+
       <div
         class="form-row"
         style="justify-content: space-between; align-items: center"

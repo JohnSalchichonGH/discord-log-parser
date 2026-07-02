@@ -354,6 +354,7 @@ body {
 .merge-toolbar {
   display: none;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 10px 14px;
   margin-bottom: 10px;
@@ -754,6 +755,30 @@ textarea { resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.5
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Inline "working…" indicator (analytics compute, etc.). */
+.load-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.load-indicator[hidden] { display: none; }
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.6s; }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    WRAPPED RECAP

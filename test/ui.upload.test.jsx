@@ -90,12 +90,52 @@ describe('Upload', () => {
     // Merge stays disabled until 2+ groups are checked, then folds them to one.
     const cbs = container.querySelectorAll('.merge-group-cb');
     cbs.forEach((cb) => fireEvent.change(cb, { target: { checked: true } }));
-    const mergeBtn = container.querySelector('.merge-toolbar .btn');
+    const mergeBtn = container.querySelector('.merge-toolbar .btn-primary');
     expect(mergeBtn.disabled).toBe(false);
     fireEvent.click(mergeBtn);
 
     await waitFor(() =>
       expect(container.querySelectorAll('.merge-group')).toHaveLength(1),
+    );
+  });
+
+  it('select all / deselect all toggles every group', async () => {
+    const { container } = render(<Upload />);
+    pick(container.querySelector('#fileInput'), [
+      new File([mkJson('1', 'a', 'alice')], 'G - a [1].json', {
+        type: 'application/json',
+      }),
+      new File([mkJson('2', 'b', 'bob')], 'G - b [2].json', {
+        type: 'application/json',
+      }),
+    ]);
+    await waitFor(() =>
+      expect(container.querySelectorAll('.merge-group')).toHaveLength(2),
+    );
+
+    const [selectAll, deselectAll] = container.querySelectorAll(
+      '.merge-toolbar .btn-secondary',
+    );
+    fireEvent.click(selectAll);
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll('.merge-group-cb')].every(
+          (cb) => cb.checked,
+        ),
+      ).toBe(true),
+    );
+    // With all groups selected, merge is enabled.
+    expect(
+      container.querySelector('.merge-toolbar .btn-primary').disabled,
+    ).toBe(false);
+
+    fireEvent.click(deselectAll);
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll('.merge-group-cb')].some(
+          (cb) => cb.checked,
+        ),
+      ).toBe(false),
     );
   });
 });

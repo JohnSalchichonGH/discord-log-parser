@@ -183,8 +183,26 @@ export function Upload() {
 
           <div class={'merge-toolbar' + (groups.length > 1 ? ' visible' : '')}>
             <span class="merge-toolbar-text">
-              <strong>{selCount}</strong> groups selected
+              <strong>{selCount}</strong> of {groups.length} groups selected
             </span>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              style="padding: 6px 12px; font-size: 12px"
+              disabled={selCount === groups.length}
+              onClick={() => setSelected(new Set(groups.map(([k]) => k)))}
+            >
+              Select all
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              style="padding: 6px 12px; font-size: 12px"
+              disabled={selCount === 0}
+              onClick={() => setSelected(new Set())}
+            >
+              Deselect all
+            </button>
             <button
               class="btn btn-primary"
               style="padding: 6px 14px; font-size: 12px"
