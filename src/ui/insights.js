@@ -165,30 +165,45 @@ export function renderInsights(stats) {
 
 // ── Reply network ────────────────────────────────────────────────────────────
 
-// Tiny force-directed layout (repulsion + edge springs + center pull), run once.
+// Force-directed layout (Fruchterman-Reingold with a cooling schedule + gravity),
+// run once. Repulsion (all pairs) spreads nodes out; edge attraction pulls
+// connected people together; gravity keeps the whole graph centered so weakly-
+// connected nodes don't pile onto the walls. Every edge gets a baseline pull so
+// people who talk cluster at all, with reply-affinity (e.w) adding extra pull on
+// top — so your strongest partners land closest, not just somewhere on the rim.
 function layout(nodes, edges, w, h, iters) {
-  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const n = nodes.length;
+  const idx = new Map(nodes.map((nd, i) => [nd.id, i]));
+  // Seed on a circle (deterministic — no randomness, so the layout is stable).
   const pos = nodes.map((_, i) => ({
-    x: w / 2 + Math.cos((2 * Math.PI * i) / nodes.length) * w * 0.32,
-    y: h / 2 + Math.sin((2 * Math.PI * i) / nodes.length) * h * 0.32,
-    vx: 0,
-    vy: 0,
+    x: w / 2 + Math.cos((2 * Math.PI * i) / n) * w * 0.28,
+    y: h / 2 + Math.sin((2 * Math.PI * i) / n) * h * 0.28,
   }));
-  const k = Math.sqrt((w * h) / Math.max(1, nodes.length));
+  // Ideal separation, scaled down so a hub-and-spoke graph stays inside the
+  // viewport instead of flinging its leaves to the walls.
+  const k = Math.sqrt((w * h) / n) * 0.5;
+  let temp = w * 0.15; // max step per iter, cooled linearly toward 0
+  const cool = temp / (iters + 1);
+
   for (let it = 0; it < iters; it++) {
-    for (let i = 0; i < nodes.length; i++)
-      for (let j = i + 1; j < nodes.length; j++) {
+    const disp = pos.map(() => ({ x: 0, y: 0 }));
+
+    // Repulsion between every pair: fr = k² / d.
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) {
         let dx = pos[i].x - pos[j].x,
           dy = pos[i].y - pos[j].y;
         const d = Math.hypot(dx, dy) || 0.01;
-        const f = ((k * k) / d) * 0.032;
+        const fr = (k * k) / d;
         dx /= d;
         dy /= d;
-        pos[i].vx += dx * f;
-        pos[i].vy += dy * f;
-        pos[j].vx -= dx * f;
-        pos[j].vy -= dy * f;
+        disp[i].x += dx * fr;
+        disp[i].y += dy * fr;
+        disp[j].x -= dx * fr;
+        disp[j].y -= dy * fr;
       }
+
+    // Attraction along edges: fa = (d² / k) · weight, weight = baseline+affinity.
     for (const e of edges) {
       const a = idx.get(e.a),
         b = idx.get(e.b);
@@ -196,26 +211,66 @@ function layout(nodes, edges, w, h, iters) {
       let dx = pos[a].x - pos[b].x,
         dy = pos[a].y - pos[b].y;
       const d = Math.hypot(dx, dy) || 0.01;
-      // Pull strength = the pair's normalized reply-affinity (same weight the
-      // edge is drawn with), so "thicker line" and "pulled closer" always agree.
-      const f = ((d * d) / k) * 0.0055 * e.w;
+      // Affinity dominates the pull (wide range) so your strongest partners are
+      // pulled distinctly closer than the crowd, not merely somewhere inside.
+      const fa = ((d * d) / k) * (0.2 + 2.8 * e.w);
       dx /= d;
       dy /= d;
-      pos[a].vx -= dx * f;
-      pos[a].vy -= dy * f;
-      pos[b].vx += dx * f;
-      pos[b].vy += dy * f;
+      disp[a].x -= dx * fa;
+      disp[a].y -= dy * fa;
+      disp[b].x += dx * fa;
+      disp[b].y += dy * fa;
     }
-    for (let i = 0; i < nodes.length; i++) {
-      pos[i].vx += (w / 2 - pos[i].x) * 0.006;
-      pos[i].vy += (h / 2 - pos[i].y) * 0.006;
-      pos[i].x += Math.max(-16, Math.min(16, pos[i].vx));
-      pos[i].y += Math.max(-16, Math.min(16, pos[i].vy));
-      pos[i].vx *= 0.86;
-      pos[i].vy *= 0.86;
+
+    // Gravity toward the center keeps loosely-connected nodes (and fully
+    // disconnected pairs) off the walls instead of pinned in a corner.
+    for (let i = 0; i < n; i++) {
+      disp[i].x += (w / 2 - pos[i].x) * 0.13;
+      disp[i].y += (h / 2 - pos[i].y) * 0.13;
+    }
+
+    // Apply displacement, capped by the current temperature; then clamp to view.
+    for (let i = 0; i < n; i++) {
+      const d = Math.hypot(disp[i].x, disp[i].y) || 0.01;
+      pos[i].x += (disp[i].x / d) * Math.min(d, temp);
+      pos[i].y += (disp[i].y / d) * Math.min(d, temp);
       pos[i].x = Math.max(24, Math.min(w - 24, pos[i].x));
       // Leave room below the lowest node for its name label (drawn at
       // y + radius + 12) so bottom-row labels don't clip past the viewBox.
+      pos[i].y = Math.max(20, Math.min(h - 42, pos[i].y));
+    }
+    temp -= cool;
+  }
+
+  // Final pass: separate any overlapping nodes so circles (and their labels)
+  // never stack — including fully-overlapping disconnected pairs.
+  const maxCount = Math.max(1, ...nodes.map((nd) => nd.count));
+  const rad = (c) => 8 + 18 * Math.sqrt(c / maxCount);
+  for (let pass = 0; pass < 14; pass++) {
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) {
+        let dx = pos[i].x - pos[j].x,
+          dy = pos[i].y - pos[j].y;
+        let d = Math.hypot(dx, dy);
+        if (d < 0.5) {
+          // Exactly stacked: pick a deterministic direction to break the tie.
+          dx = i - j || 1;
+          dy = 1;
+          d = Math.hypot(dx, dy);
+        }
+        const min = rad(nodes[i].count) + rad(nodes[j].count) + 6;
+        if (d < min) {
+          const push = (min - d) / 2;
+          dx /= d;
+          dy /= d;
+          pos[i].x += dx * push;
+          pos[i].y += dy * push;
+          pos[j].x -= dx * push;
+          pos[j].y -= dy * push;
+        }
+      }
+    for (let i = 0; i < n; i++) {
+      pos[i].x = Math.max(24, Math.min(w - 24, pos[i].x));
       pos[i].y = Math.max(20, Math.min(h - 42, pos[i].y));
     }
   }
