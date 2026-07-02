@@ -264,7 +264,7 @@ function layout(nodes, edges, w, h, iters) {
           dy = 1;
           d = Math.hypot(dx, dy);
         }
-        const min = radOf[i] + radOf[j] + 8;
+        const min = radOf[i] + radOf[j] + 18;
         if (d < min) {
           const push = (min - d) / 2;
           dx /= d;
@@ -394,9 +394,13 @@ export function buildNetwork(stats) {
 
 function networkSvg(net, focusId) {
   const { nodes, edges } = net;
-  const w = 700,
-    h = 460;
-  const pos = layout(nodes, edges, w, h, 220);
+  // Lay out on a roomy canvas, then fit the viewBox to the result. More space
+  // between nodes relative to the fixed label size is what stops labels from
+  // colliding; the relative geometry (who's near whom) is a uniform scale, so
+  // it's untouched.
+  const LW = 1000,
+    LH = 660;
+  const pos = layout(nodes, edges, LW, LH, 220);
   const idx = new Map(nodes.map((n, i) => [n.id, i]));
   const nameOf = new Map(nodes.map((n) => [n.id, n.name]));
   const maxCount = nodes[0].count || 1;
@@ -413,8 +417,24 @@ function networkSvg(net, focusId) {
   }
   const dim = (id) => focusId && !neighbours.has(id);
 
-  // The .net-vp group is what pan/zoom transforms; the SVG viewBox stays fixed.
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;max-height:520px;cursor:grab;touch-action:none;user-select:none" role="img" aria-label="Reply network — scroll to zoom, drag to pan">`;
+  // Fit the viewBox to the laid-out graph (nodes + their radii, plus a little
+  // extra below each node for its label), so it's centered and fully visible.
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  nodes.forEach((nd, i) => {
+    const rr = r(nd.count);
+    minX = Math.min(minX, pos[i].x - rr);
+    maxX = Math.max(maxX, pos[i].x + rr);
+    minY = Math.min(minY, pos[i].y - rr);
+    maxY = Math.max(maxY, pos[i].y + rr + 16);
+  });
+  const pad = 14;
+  const vb = `${(minX - pad).toFixed(0)} ${(minY - pad).toFixed(0)} ${(maxX - minX + 2 * pad).toFixed(0)} ${(maxY - minY + 2 * pad).toFixed(0)}`;
+
+  // The .net-vp group is what pan/zoom transforms; the viewBox stays fixed.
+  let svg = `<svg viewBox="${vb}" width="100%" style="display:block;max-height:560px;cursor:grab;touch-action:none;user-select:none" role="img" aria-label="Reply network — scroll to zoom, drag to pan">`;
   svg += `<g class="net-vp">`;
   // Edges first (under the nodes). Thickness + opacity track the same normalized
   // affinity weight the layout uses, so a bolder line always means "closer".
