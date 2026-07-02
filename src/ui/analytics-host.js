@@ -55,15 +55,6 @@ let insightFull = null;
 // Retained message DTOs (for the calendar + Wrapped recap) so the recap can be
 // recomputed when the timezone or theme changes without another worker round-trip.
 let browseMessages = null;
-// Per-user chart recompute is debounced AND coalesced: at most ONE worker
-// recompute runs at a time, and while it runs only the LATEST requested
-// selection is remembered — so clicking through nodes never queues a backlog of
-// heavy pipeline runs (which both flashes through selections one-by-one and, on
-// a large conversation, can pile up enough memory to crash the worker).
-let chartSeq = 0; // bumped on every request → invalidates any in-flight result
-let chartInFlight = false;
-let chartPending; // undefined = nothing queued; a Set = a filter waiting to run
-let chartTimer = null;
 
 // Compute analytics over the full filtered conversation — off-thread in the
 // worker when available, else inline on the main thread.
@@ -160,7 +151,7 @@ async function loadInsights() {
   if (insightFull) {
     resetNetView(); // fresh dataset → start the network at default zoom/pan
     populateInsightUserList(insightFull.users);
-    refreshView();
+    await refreshView();
   }
   // Message explorer: fetch the full conversation once and hand it to the
   // calendar (which buckets by day/hour client-side).
@@ -191,58 +182,30 @@ function renderWrappedRecap() {
 
 // Render the main charts for the current selection, plus the always-full
 // network/partners with the focused user highlighted (a single selected user).
-function refreshView() {
-  if (!insightFull) return;
+async function refreshView() {
+  if (!insightFull) return null;
   const ids = selectedInsightUserIds();
   const focusId = ids && ids.size === 1 ? [...ids][0] : null;
   // Highlight the focused user in the network + partners FIRST — this reads the
   // already-computed full analytics, so clicking a node reacts instantly instead
-  // of waiting on the (possibly slow) per-user chart recompute.
+  // of waiting on the (possibly slow) per-user chart recompute below.
   const hasNetwork = renderNetwork(insightFull, focusId, focusUser);
   $('insightNetworkSection').style.display = hasNetwork ? 'block' : 'none';
   renderPartners(insightFull, focusId);
-  updateCharts(ids);
-}
-
-// Update the main charts for the current selection. Unfiltered → reuse the full
-// analytics instantly. Filtered → recompute in the worker, but debounced and
-// coalesced (see drainChart) so clicking through nodes never queues a backlog.
-function updateCharts(ids) {
-  chartSeq++; // invalidate any recompute already in flight
-  clearTimeout(chartTimer);
-  if (!ids) {
-    // Back to the whole conversation — instant, no worker round-trip.
-    chartPending = undefined;
-    setInsightBusy(false);
-    renderInsights(insightFull);
-    return;
-  }
-  chartPending = ids;
-  setInsightBusy(true);
-  // If a recompute is already running it will pick up chartPending when it
-  // finishes; otherwise debounce briefly, then drain.
-  if (!chartInFlight) chartTimer = setTimeout(drainChart, 160);
-}
-
-// Run recomputes one at a time, always for the MOST RECENT pending selection.
-async function drainChart() {
-  while (chartPending !== undefined) {
-    const ids = chartPending;
-    chartPending = undefined;
-    const seq = chartSeq;
-    chartInFlight = true;
-    const view = await requestAnalytics(
+  // Main charts: reuse the full analytics when unfiltered, else recompute for the
+  // selection (a worker round-trip) with the busy indicator up.
+  let view = insightFull;
+  if (ids) {
+    setInsightBusy(true);
+    view = await requestAnalytics(
       insightFiles,
       { ...insightBaseOpts, userFilterIds: ids },
       insightTz,
     );
-    chartInFlight = false;
-    // Superseded while computing (a newer selection, or a reset to unfiltered)?
-    // Drop this result; the loop picks up any newer pending selection.
-    if (seq !== chartSeq) continue;
     setInsightBusy(false);
-    if (view) renderInsights(view);
   }
+  if (view) renderInsights(view);
+  return view;
 }
 
 // Drill down to a single user (toggle: clicking the sole-focused user clears it).
@@ -282,7 +245,7 @@ async function setInsightTz(tz) {
     insightTz,
   );
   setInsightBusy(false);
-  refreshView();
+  await refreshView();
   setCalendarTz(insightTz); // re-bucket the explorer's days/hours
   renderWrappedRecap(); // peak-hour persona / busiest day depend on the tz
 }

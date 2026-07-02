@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/preact';
 import { Transcript } from '../src/ui/views/Review/Transcript.jsx';
-import {
-  processResult,
-  processedOutputs,
-  exploreTab,
-} from '../src/ui/store.js';
+import { processResult, processedOutputs } from '../src/ui/store.js';
 import { settings } from '../src/ui/settings.js';
 
 // One processed group with two messages; a second group is added per-test to
@@ -27,7 +23,6 @@ function group(name, authorId = '1') {
 
 beforeEach(() => {
   settings.value = {};
-  exploreTab.value = 'transcript'; // the preview only renders when its tab is open
   processResult.value = { totalMessages: 1, totalFiltered: 1, totalKept: 1 };
   processedOutputs.value = [group('general')];
 });
@@ -37,7 +32,6 @@ afterEach(() => {
   processResult.value = null;
   processedOutputs.value = [];
   settings.value = {};
-  exploreTab.value = 'summary';
 });
 
 describe('Review Transcript card', () => {
@@ -57,16 +51,6 @@ describe('Review Transcript card', () => {
     expect(container.querySelector('#previewInfo').textContent).toMatch(
       /lines · .* chars · ~.* tokens/,
     );
-  });
-
-  it('renders only a light shell (no heavy preview) when its tab is closed', () => {
-    exploreTab.value = 'summary';
-    const { container } = render(<Transcript />);
-    // The card shell stays so the Explore-tab CSS still has its target…
-    expect(container.querySelector('#previewCard')).not.toBeNull();
-    // …but the expensive preview content is not built.
-    expect(container.querySelector('#previewContent')).toBeNull();
-    expect(container.querySelector('#previewInfo')).toBeNull();
   });
 
   it('hides the channel selector for a single group, shows it for many', () => {
