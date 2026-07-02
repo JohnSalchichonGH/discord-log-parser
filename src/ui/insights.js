@@ -414,15 +414,26 @@ function networkSvg(net, focusId) {
   const r = (c) => 8 + 18 * Math.sqrt(c / maxCount);
 
   // Neighbours of the focused node (either direction) for highlighting.
-  const neighbours = new Set();
+  // When a participant is focused, fade every node by how much it interacts with
+  // them: the focused node stays solid, its reply partners scale up with the
+  // number of replies exchanged (sqrt so mid-level partners still read), and
+  // people with no interaction sit at a faint — but still visible — floor.
+  const focusRaw = new Map();
+  let focusMax = 1;
   if (focusId) {
-    neighbours.add(focusId);
     for (const e of edges) {
-      if (e.a === focusId) neighbours.add(e.b);
-      if (e.b === focusId) neighbours.add(e.a);
+      const other = e.a === focusId ? e.b : e.b === focusId ? e.a : null;
+      if (other != null) {
+        focusRaw.set(other, e.raw);
+        if (e.raw > focusMax) focusMax = e.raw;
+      }
     }
   }
-  const dim = (id) => focusId && !neighbours.has(id);
+  const nodeOpacity = (id) => {
+    if (!focusId || id === focusId) return 1;
+    const raw = focusRaw.get(id);
+    return raw == null ? 0.12 : 0.4 + 0.6 * Math.sqrt(raw / focusMax);
+  };
 
   // Fit the viewBox to the laid-out graph (nodes + their radii, plus a little
   // extra below each node for its label), so it's centered and fully visible.
@@ -466,7 +477,7 @@ function networkSvg(net, focusId) {
     const p = pos[i];
     const rad = r(n.count);
     const isFocus = n.id === focusId;
-    const o = dim(n.id) ? 0.18 : 1;
+    const o = nodeOpacity(n.id);
     const fillOp = isFocus ? 1 : 0.92;
     const label = escHtml(
       n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name,
