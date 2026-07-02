@@ -2,6 +2,7 @@
 // Hand-rolled SVG/HTML, theme-aware via the app's CSS variables (no chart deps).
 
 import { escHtml } from '../core/format.js';
+import { authorColor } from './colors.js';
 
 const $ = (id) => document.getElementById(id);
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // display order
@@ -435,10 +436,13 @@ function networkSvg(net, focusId) {
 
   // The .net-vp group is what pan/zoom transforms; the viewBox stays fixed.
   let svg = `<svg viewBox="${vb}" width="100%" style="display:block;max-height:560px;cursor:grab;touch-action:none;user-select:none" role="img" aria-label="Reply network — scroll to zoom, drag to pan">`;
-  svg += `<g class="net-vp">`;
   // Edges first (under the nodes). Thickness + opacity track the same normalized
-  // affinity weight the layout uses, so a bolder line always means "closer".
-  for (const e of edges) {
+  // affinity weight the layout uses, so a bolder line always means "closer". Each
+  // line is a gradient from one person's color to the other's, so it visibly
+  // connects the two participants.
+  let defs = '';
+  let edgeStr = '';
+  edges.forEach((e, i) => {
     const a = pos[idx.get(e.a)],
       b = pos[idx.get(e.b)];
     const touchesFocus = focusId && (e.a === focusId || e.b === focusId);
@@ -447,8 +451,10 @@ function networkSvg(net, focusId) {
     const sw = (0.6 + 3.2 * e.w).toFixed(2);
     const na = escHtml(nameOf.get(e.a) || e.a);
     const nb = escHtml(nameOf.get(e.b) || e.b);
-    svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent)" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"><title>${na} ↔ ${nb}: ${e.raw.toLocaleString()} replies (${na}→${nb} ${e.ab.toLocaleString()}, ${nb}→${na} ${e.ba.toLocaleString()})</title></line>`;
-  }
+    defs += `<linearGradient id="ng${i}" gradientUnits="userSpaceOnUse" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"><stop offset="0" stop-color="${authorColor(e.a)}"></stop><stop offset="1" stop-color="${authorColor(e.b)}"></stop></linearGradient>`;
+    edgeStr += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="url(#ng${i})" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"><title>${na} ↔ ${nb}: ${e.raw.toLocaleString()} replies (${na}→${nb} ${e.ab.toLocaleString()}, ${nb}→${na} ${e.ba.toLocaleString()})</title></line>`;
+  });
+  svg += `<defs>${defs}</defs><g class="net-vp">${edgeStr}`;
   // Nodes + labels on top.
   nodes.forEach((n, i) => {
     const p = pos[i];
@@ -460,7 +466,7 @@ function networkSvg(net, focusId) {
       n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name,
     );
     svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
-    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="var(--accent)" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
+    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${authorColor(n.id)}" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
     // Halo (paint-order: stroke) keeps labels legible over nodes/edges.
     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;

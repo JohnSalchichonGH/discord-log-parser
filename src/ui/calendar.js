@@ -8,6 +8,8 @@
 // per processing run, plus the uid->name userMap. Day/hour bucketing respects
 // the shared UTC/Local timezone toggle.
 
+import { authorColor } from './colors.js';
+
 const $ = (id) => document.getElementById(id);
 const escHtml = (s) =>
   String(s).replace(
@@ -42,17 +44,6 @@ const DOWS = [
   'Saturday',
 ];
 const DOW_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // Mon-first grid
-// Pleasant, theme-independent avatar colors picked by author-id hash.
-const AVATAR_COLORS = [
-  '#6c9eff',
-  '#5ccf7f',
-  '#e09a5c',
-  '#e06c6c',
-  '#a78bfa',
-  '#4ec9c9',
-  '#e0709a',
-  '#c9b34e',
-];
 
 const BATCH = 250; // messages loaded per scroll extend
 const MAXWIN = 1500; // cap on rendered messages (sliding window)
@@ -94,11 +85,6 @@ function fmtDayLabel(key) {
   const [y, mo, day] = keyParts(key);
   const dow = new Date(Date.UTC(y, mo - 1, day)).getUTCDay();
   return `${DOWS[dow]}, ${MONTHS[mo - 1]} ${day}, ${y}`;
-}
-function hashHue(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
 }
 
 // ── module state ─────────────────────────────────────────────────────────────
@@ -297,8 +283,7 @@ function avatar(m) {
       .join('')
       .toUpperCase()
       .slice(0, 2) || name.slice(0, 2).toUpperCase();
-  const color =
-    AVATAR_COLORS[hashHue(m.authorId || name) % AVATAR_COLORS.length];
+  const color = authorColor(m.authorId || name);
   return `<div class="msg-avatar" style="background:${color}">${escHtml(initials)}</div>`;
 }
 
