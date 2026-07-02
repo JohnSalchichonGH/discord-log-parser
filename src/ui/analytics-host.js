@@ -55,9 +55,14 @@ let insightFull = null;
 // Retained message DTOs (for the calendar + Wrapped recap) so the recap can be
 // recomputed when the timezone or theme changes without another worker round-trip.
 let browseMessages = null;
-// Debounce + supersede token for the per-user chart recompute, so clicking
-// through several nodes doesn't render each intermediate selection one-by-one.
-let chartSeq = 0;
+// Per-user chart recompute is debounced AND coalesced: at most ONE worker
+// recompute runs at a time, and while it runs only the LATEST requested
+// selection is remembered — so clicking through nodes never queues a backlog of
+// heavy pipeline runs (which both flashes through selections one-by-one and, on
+// a large conversation, can pile up enough memory to crash the worker).
+let chartSeq = 0; // bumped on every request → invalidates any in-flight result
+let chartInFlight = false;
+let chartPending; // undefined = nothing queued; a Set = a filter waiting to run
 let chartTimer = null;
 
 // Compute analytics over the full filtered conversation — off-thread in the
@@ -201,27 +206,43 @@ function refreshView() {
 
 // Update the main charts for the current selection. Unfiltered → reuse the full
 // analytics instantly. Filtered → recompute in the worker, but debounced and
-// supersede-guarded so clicking through nodes only ever renders the FINAL
-// selection instead of flashing through each one as its request lands.
+// coalesced (see drainChart) so clicking through nodes never queues a backlog.
 function updateCharts(ids) {
+  chartSeq++; // invalidate any recompute already in flight
   clearTimeout(chartTimer);
-  const seq = ++chartSeq;
   if (!ids) {
+    // Back to the whole conversation — instant, no worker round-trip.
+    chartPending = undefined;
     setInsightBusy(false);
     renderInsights(insightFull);
     return;
   }
+  chartPending = ids;
   setInsightBusy(true);
-  chartTimer = setTimeout(async () => {
+  // If a recompute is already running it will pick up chartPending when it
+  // finishes; otherwise debounce briefly, then drain.
+  if (!chartInFlight) chartTimer = setTimeout(drainChart, 160);
+}
+
+// Run recomputes one at a time, always for the MOST RECENT pending selection.
+async function drainChart() {
+  while (chartPending !== undefined) {
+    const ids = chartPending;
+    chartPending = undefined;
+    const seq = chartSeq;
+    chartInFlight = true;
     const view = await requestAnalytics(
       insightFiles,
       { ...insightBaseOpts, userFilterIds: ids },
       insightTz,
     );
-    if (seq !== chartSeq) return; // a newer selection superseded this one
+    chartInFlight = false;
+    // Superseded while computing (a newer selection, or a reset to unfiltered)?
+    // Drop this result; the loop picks up any newer pending selection.
+    if (seq !== chartSeq) continue;
     setInsightBusy(false);
     if (view) renderInsights(view);
-  }, 200);
+  }
 }
 
 // Drill down to a single user (toggle: clicking the sole-focused user clears it).
