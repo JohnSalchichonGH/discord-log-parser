@@ -757,16 +757,63 @@ textarea { resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.5
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Inline "working…" indicator (analytics compute, etc.). */
-.load-indicator {
+/* Analytics "working…" overlay: dims the Insights card and floats a loading
+   badge that stays centered in view as you scroll (so it's visible whether you
+   clicked a node up top or a chart down low). Clicks pass through so you can
+   keep selecting participants while a recompute is in flight. */
+#insightsCard { position: relative; }
+.insight-busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+}
+.insight-busy-overlay[hidden] { display: none; }
+.insight-busy-box {
+  position: sticky;
+  top: 42%;
+  width: max-content;
+  max-width: 80%;
+  margin: 0 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0 10px;
+  gap: 10px;
+  padding: 18px 24px;
   font-size: 13px;
   color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
 }
-.load-indicator[hidden] { display: none; }
+.indeterminate-bar {
+  position: relative;
+  width: 170px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.indeterminate-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .indeterminate-bar::after { animation-duration: 2.2s; }
+}
 .spinner {
   width: 15px;
   height: 15px;
