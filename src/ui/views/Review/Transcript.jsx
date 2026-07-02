@@ -6,7 +6,7 @@
 // it; the card stays hidden until a run has produced outputs.
 
 import { useState } from 'preact/hooks';
-import { processResult, processedOutputs } from '../../store.js';
+import { processResult, processedOutputs, exploreTab } from '../../store.js';
 import { getSetting } from '../../settings.js';
 import { exportConfig } from '../../download.js';
 import { renderTxt } from '../../../render/txt.js';
@@ -23,6 +23,20 @@ export function Transcript() {
   const [copyLabel, setCopyLabel] = useState('Copy all');
 
   if (!result || outputs.length === 0) return null;
+
+  // Rendering the full transcript (renderTxt over the whole conversation) is the
+  // heaviest thing on the Review step. Every Explore tab is mounted at once (CSS
+  // just hides the inactive ones), so without this guard the full preview would
+  // render the instant you enter Review — freezing the UI even though you're on
+  // another tab. Only build it when this tab is actually the one being shown.
+  if (exploreTab.value !== 'transcript')
+    return (
+      <div
+        class="panel-card"
+        id="previewCard"
+        data-explore-panel="transcript"
+      />
+    );
 
   const idx = sel < outputs.length ? sel : 0;
   const po = outputs[idx];
