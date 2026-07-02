@@ -479,11 +479,18 @@ function networkSvg(net, focusId) {
     const isFocus = n.id === focusId;
     const o = nodeOpacity(n.id);
     const fillOp = isFocus ? 1 : 0.92;
+    // Ring: the focused node gets a bold white outline; the people it interacted
+    // with get a thinner white ring (which fades with the node's interaction-
+    // graded opacity); everyone else keeps the plain dark separator ring.
+    const interacted = focusId && focusRaw.has(n.id);
+    const ringColor =
+      isFocus || interacted ? 'var(--text-primary)' : 'var(--bg-secondary)';
+    const ringW = isFocus ? 2.5 : interacted ? 1.5 : 2;
     const label = escHtml(
       n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name,
     );
     svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
-    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${colorOf.get(n.id)}" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
+    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${colorOf.get(n.id)}" fill-opacity="${fillOp}" stroke="${ringColor}" stroke-width="${ringW}"></circle>`;
     // Halo (paint-order: stroke) keeps labels legible over nodes/edges.
     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;
