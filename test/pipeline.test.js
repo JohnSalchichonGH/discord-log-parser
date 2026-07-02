@@ -5,7 +5,10 @@ import {
   processGroup,
   getRawMessages,
   getFilteredMessages,
+  getFilteredConversation,
+  buildIdentity,
 } from '../src/core/pipeline.js';
+import { buildGroups } from '../src/core/grouping.js';
 import { renderTxt } from '../src/render/txt.js';
 import { chunkMessages } from '../src/core/chunking.js';
 
@@ -465,6 +468,36 @@ describe('renderTxt (end-to-end)', () => {
     });
     expect(red).toContain('[URL]');
     expect(red).not.toContain('example.com');
+  });
+});
+
+describe('analytics ⇄ export reconciliation (getFilteredConversation)', () => {
+  // The SAME author posts an identical line on the same day in TWO different
+  // channels — legitimately distinct messages. A single global dedup pass keys
+  // by author+day+text (no channel), so it wrongly collapses them; per-channel
+  // dedup (what the export does) keeps both.
+  const txt = (ch) =>
+    `Guild: G\nChannel: ${ch}\n\n[7/12/2025 12:00 PM] sam\nshared line\n`;
+  const files = [
+    { isTxt: true, content: txt('a'), channelId: '1', sortOrder: 0 },
+    { isTxt: true, content: txt('b'), channelId: '2', sortOrder: 0 },
+  ];
+
+  it('dedups per channel group, not globally', () => {
+    // Documents the old (inaccurate) global behavior the analytics used to use…
+    expect(getFilteredMessages(files, baseOpts()).filtered).toHaveLength(1);
+    // …vs the grouped conversation the analytics now share with the export.
+    expect(getFilteredConversation(files, baseOpts()).filtered).toHaveLength(2);
+  });
+
+  it('message count equals the sum of per-group export filtering', () => {
+    const identity = buildIdentity(files, false);
+    let perGroup = 0;
+    for (const [, arr] of buildGroups(files))
+      perGroup += processGroup(arr, baseOpts(), identity).filteredCount;
+    expect(getFilteredConversation(files, baseOpts()).filtered).toHaveLength(
+      perGroup,
+    );
   });
 });
 

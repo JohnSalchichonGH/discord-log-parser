@@ -12,7 +12,7 @@ import { buildGroups } from './core/grouping.js';
 import {
   processGroup,
   getRawMessages,
-  getFilteredMessages,
+  getFilteredConversation,
   buildIdentity,
 } from './core/pipeline.js';
 import { computeAnalytics } from './core/analytics.js';
@@ -22,6 +22,22 @@ disableAccurate(); // worker is approx-only
 
 // key -> { content, isTxt, isJson, _raw }
 const cache = new Map();
+
+// Rebuild file objects from the cached parse + the grouping metadata the main
+// thread sends, so buildGroups/getFilteredConversation can split by channel.
+function reconstructFiles(fileMeta) {
+  return fileMeta.map((meta) => {
+    const entry = cache.get(meta.key);
+    if (!entry) throw new Error('worker cache miss: ' + meta.key);
+    return {
+      ...entry,
+      channelId: meta.channelId,
+      baseName: meta.baseName,
+      sortOrder: meta.sortOrder,
+      afterDate: meta.afterDate,
+    };
+  });
+}
 
 self.onmessage = (e) => {
   const msg = e.data;
@@ -50,18 +66,7 @@ self.onmessage = (e) => {
       post({ type: 'authors', authors: [...authors.entries()] });
     } else if (msg.type === 'process') {
       // Reconstruct file objects from cache + the meta the main thread sends.
-      const files = [];
-      for (const meta of msg.fileMeta) {
-        const entry = cache.get(meta.key);
-        if (!entry) throw new Error('worker cache miss: ' + meta.key);
-        files.push({
-          ...entry,
-          channelId: meta.channelId,
-          baseName: meta.baseName,
-          sortOrder: meta.sortOrder,
-          afterDate: meta.afterDate,
-        });
-      }
+      const files = reconstructFiles(msg.fileMeta);
 
       const groups = buildGroups(files);
       const opts = { ...msg.opts, countTokens };
@@ -97,14 +102,11 @@ self.onmessage = (e) => {
         totalKept,
       });
     } else if (msg.type === 'analyze') {
-      // Analytics over the FULL filtered conversation across all files (one
-      // identity space), independent of the token-budget trim.
-      const files = msg.fileMeta.map((meta) => {
-        const entry = cache.get(meta.key);
-        if (!entry) throw new Error('worker cache miss: ' + meta.key);
-        return { ...entry };
-      });
-      const { filtered } = getFilteredMessages(files, msg.opts);
+      // Analytics over the FULL filtered conversation across all files, built
+      // with the SAME per-channel grouping + one shared identity as the export
+      // (so totals reconcile), independent of the token-budget trim.
+      const files = reconstructFiles(msg.fileMeta);
+      const { filtered } = getFilteredConversation(files, msg.opts);
       post({
         type: 'analytics',
         stats: computeAnalytics(filtered, { tz: msg.tz }),
@@ -113,12 +115,8 @@ self.onmessage = (e) => {
       // Full (timestamp-sorted) filtered conversation as lightweight DTOs, for
       // the message-explorer calendar. Sent once per processing run; the UI
       // buckets by day/hour client-side (so the tz toggle needs no round-trip).
-      const files = msg.fileMeta.map((meta) => {
-        const entry = cache.get(meta.key);
-        if (!entry) throw new Error('worker cache miss: ' + meta.key);
-        return { ...entry };
-      });
-      const { filtered, userMap } = getFilteredMessages(files, msg.opts);
+      const files = reconstructFiles(msg.fileMeta);
+      const { filtered, userMap } = getFilteredConversation(files, msg.opts);
       post({
         type: 'messages',
         messages: filtered.map((m) => ({

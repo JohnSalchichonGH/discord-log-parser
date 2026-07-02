@@ -34,7 +34,8 @@ export function Insights() {
         Insights
       </div>
       <div class="card-desc">
-        Based on all messages in your filters, before token trimming.
+        Every message in your filters — before the token-budget trim and the
+        low-activity cutoff — so counts here can exceed the exported total.
       </div>
 
       <div

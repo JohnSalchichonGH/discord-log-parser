@@ -9,6 +9,7 @@ import { parseMessages as parseHtml } from '../parsers/html.js';
 import { parseMessages as parseTxt } from '../parsers/txt.js';
 import { parseMessages as parseJson } from '../parsers/json.js';
 import { buildUserMap, assembleMessage } from './assemble.js';
+import { buildGroups } from './grouping.js';
 import {
   messageCost,
   legendReserve,
@@ -39,10 +40,11 @@ export function buildIdentity(files, useRealNames) {
 }
 
 // Parse + dedup + apply the pre-filters (date/bots/system/media/whitelist),
-// returning the full filtered conversation (NOT token-trimmed). Shared by the
-// export pipeline (processGroup) and the Insights analytics so both see the
-// same set of messages. When `identity` is supplied it is used instead of
-// building a per-call (per-group) one, unifying identity across channels.
+// returning ONE channel group's full filtered conversation (NOT token-trimmed).
+// The export pipeline (processGroup) and the analytics (getFilteredConversation)
+// both call this per channel group with the SAME shared identity, so their
+// message sets reconcile. When `identity` is supplied it is used instead of
+// building a per-call one, unifying identity across channels.
 export function getFilteredMessages(sortedFiles, opts, identity) {
   const {
     userFilter,
@@ -275,6 +277,24 @@ export function getFilteredMessages(sortedFiles, opts, identity) {
     filtered = filtered.filter((m) => opts.userFilterIds.has(m.authorId));
 
   return { filtered, userMap, allMessagesCount: allMessages.length };
+}
+
+// The full filtered conversation across ALL files, assembled exactly as the
+// export does: split into channel groups and deduped per group under ONE shared
+// identity. This is the single source of truth for the Insights / Calendar /
+// Wrapped analytics, so their totals reconcile with the export. The only
+// differences that remain are scope by design: analytics cover this whole set,
+// while Summary/Transcript reflect the token-trimmed, low-activity-filtered
+// export.
+export function getFilteredConversation(files, opts) {
+  const groups = buildGroups(files);
+  const identity = buildIdentity(files, opts.useRealNames);
+  const filtered = [];
+  for (const [, arr] of groups)
+    for (const m of getFilteredMessages(arr, opts, identity).filtered)
+      filtered.push(m);
+  filtered.sort((a, b) => a.timestamp - b.timestamp);
+  return { filtered, userMap: identity.userMap };
 }
 
 export function processGroup(sortedFiles, opts, identity) {

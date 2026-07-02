@@ -14,7 +14,7 @@
 // effects that (re)load analytics whenever a new run lands.
 
 import { escHtml } from '../core/format.js';
-import { getFilteredMessages } from '../core/pipeline.js';
+import { getFilteredConversation } from '../core/pipeline.js';
 import { computeAnalytics } from '../core/analytics.js';
 import {
   renderInsights,
@@ -79,7 +79,7 @@ async function requestAnalytics(files, opts, tz) {
       markWorkerBroken();
     }
   }
-  const { filtered } = getFilteredMessages(files, opts);
+  const { filtered } = getFilteredConversation(files, opts);
   return computeAnalytics(filtered, { tz });
 }
 
@@ -105,7 +105,7 @@ async function requestMessages(files, opts) {
       markWorkerBroken();
     }
   }
-  const { filtered, userMap } = getFilteredMessages(files, opts);
+  const { filtered, userMap } = getFilteredConversation(files, opts);
   return {
     messages: filtered.map((m) => ({
       authorId: m.authorId,
