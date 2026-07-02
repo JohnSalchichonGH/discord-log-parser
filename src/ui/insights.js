@@ -190,13 +190,15 @@ function layout(nodes, edges, w, h, iters) {
         pos[j].vy -= dy * f;
       }
     for (const e of edges) {
-      const a = idx.get(e.from),
-        b = idx.get(e.to);
+      const a = idx.get(e.a),
+        b = idx.get(e.b);
       if (a == null || b == null || a === b) continue;
       let dx = pos[a].x - pos[b].x,
         dy = pos[a].y - pos[b].y;
       const d = Math.hypot(dx, dy) || 0.01;
-      const f = ((d * d) / k) * 0.0009 * Math.min(6, e.count);
+      // Pull strength = the pair's normalized reply-affinity (same weight the
+      // edge is drawn with), so "thicker line" and "pulled closer" always agree.
+      const f = ((d * d) / k) * 0.0055 * e.w;
       dx /= d;
       dy /= d;
       pos[a].vx -= dx * f;
@@ -220,36 +222,91 @@ function layout(nodes, edges, w, h, iters) {
   return pos;
 }
 
+// Only pairs with at least this many replies exchanged are graphed — filters out
+// one-off "@reply" noise so the network shows relationships, not every stray link.
+const MIN_PAIR_REPLIES = 3;
+
 // Build the node/edge set for the reply network, or null when there's nothing
 // to graph. Only participants who actually reply to / are replied to by someone
 // belong here — restricting to connected users keeps TXT exports (which carry no
 // reply data) and other reply-less participants out entirely.
-function buildNetwork(stats) {
-  const realEdges = stats.replyEdges.filter((e) => e.from !== e.to);
-  if (realEdges.length === 0) return null;
+//
+// Edges are UNDIRECTED pairs weighted by reciprocal reply-affinity: each side's
+// share of its OWN replies that goes to the other, combined as a geometric mean.
+// Normalizing by each person's total replies (rather than using the raw count)
+// stops high-volume users from clumping in the centre just for being busy, and
+// the geometric mean rewards genuine two-way bonds over one-sided "fan" replies.
+export function buildNetwork(stats) {
+  // Total replies SENT by each user — the affinity denominator.
+  const outReplies = new Map();
+  for (const e of stats.replyEdges) {
+    if (e.from === e.to) continue;
+    outReplies.set(e.from, (outReplies.get(e.from) || 0) + e.count);
+  }
+
+  // Collapse the two directional edges of a pair into one undirected record.
+  const pairs = new Map(); // "a\tb" (a<b) -> { a, b, ab, ba, raw }
+  for (const e of stats.replyEdges) {
+    if (e.from === e.to) continue;
+    const [a, b] = e.from < e.to ? [e.from, e.to] : [e.to, e.from];
+    const key = a + '\t' + b;
+    let p = pairs.get(key);
+    if (!p) pairs.set(key, (p = { a, b, ab: 0, ba: 0, raw: 0 }));
+    if (e.from === a) p.ab += e.count;
+    else p.ba += e.count;
+    p.raw += e.count;
+  }
+  if (pairs.size === 0) return null;
 
   const connected = new Set();
-  for (const e of realEdges) {
-    connected.add(e.from);
-    connected.add(e.to);
+  for (const p of pairs.values()) {
+    connected.add(p.a);
+    connected.add(p.b);
   }
-  // Top connected users by message count (already sorted desc in stats.users).
+  // Top connected users by message count (nodes are sized by messages).
   let nodes = stats.users
     .filter((u) => connected.has(u.id))
     .slice(0, 28)
     .map((u) => ({ id: u.id, name: u.name, count: u.count }));
   let nodeIds = new Set(nodes.map((n) => n.id));
-  let edges = realEdges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
-  // After capping the node count, drop any node left without a visible edge.
+
+  // Keep pairs whose both endpoints are shown and that clear the noise floor.
+  let edges = [];
+  for (const p of pairs.values()) {
+    if (!nodeIds.has(p.a) || !nodeIds.has(p.b)) continue;
+    if (p.raw < MIN_PAIR_REPLIES) continue;
+    const sa = p.ab / (outReplies.get(p.a) || 1);
+    const sb = p.ba / (outReplies.get(p.b) || 1);
+    edges.push({
+      a: p.a,
+      b: p.b,
+      ab: p.ab,
+      ba: p.ba,
+      raw: p.raw,
+      weight: Math.sqrt(sa * sb),
+    });
+  }
+  // Drop any node left without a surviving edge.
   const withEdge = new Set();
   for (const e of edges) {
-    withEdge.add(e.from);
-    withEdge.add(e.to);
+    withEdge.add(e.a);
+    withEdge.add(e.b);
   }
   nodes = nodes.filter((n) => withEdge.has(n.id));
   nodeIds = new Set(nodes.map((n) => n.id));
-  edges = edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  edges = edges.filter((e) => nodeIds.has(e.a) && nodeIds.has(e.b));
   if (nodes.length < 2) return null;
+
+  // Normalize weights to [0,1] for drawing + layout. If every surviving pair is
+  // one-directional (affinity 0), fall back to raw volume so edges still differ.
+  let maxW = 0;
+  for (const e of edges) maxW = Math.max(maxW, e.weight);
+  if (maxW > 0) for (const e of edges) e.w = e.weight / maxW;
+  else {
+    let maxRaw = 0;
+    for (const e of edges) maxRaw = Math.max(maxRaw, e.raw);
+    for (const e of edges) e.w = maxRaw ? e.raw / maxRaw : 0;
+  }
   return { nodes, edges };
 }
 
@@ -259,8 +316,8 @@ function networkSvg(net, focusId) {
     h = 460;
   const pos = layout(nodes, edges, w, h, 220);
   const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const nameOf = new Map(nodes.map((n) => [n.id, n.name]));
   const maxCount = nodes[0].count || 1;
-  const maxEdge = Math.max(...edges.map((e) => e.count));
   const r = (c) => 8 + 18 * Math.sqrt(c / maxCount);
 
   // Neighbours of the focused node (either direction) for highlighting.
@@ -268,8 +325,8 @@ function networkSvg(net, focusId) {
   if (focusId) {
     neighbours.add(focusId);
     for (const e of edges) {
-      if (e.from === focusId) neighbours.add(e.to);
-      if (e.to === focusId) neighbours.add(e.from);
+      if (e.a === focusId) neighbours.add(e.b);
+      if (e.b === focusId) neighbours.add(e.a);
     }
   }
   const dim = (id) => focusId && !neighbours.has(id);
@@ -277,15 +334,18 @@ function networkSvg(net, focusId) {
   // The .net-vp group is what pan/zoom transforms; the SVG viewBox stays fixed.
   let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;max-height:520px;cursor:grab;touch-action:none;user-select:none" role="img" aria-label="Reply network — scroll to zoom, drag to pan">`;
   svg += `<g class="net-vp">`;
-  // Edges first (under the nodes).
+  // Edges first (under the nodes). Thickness + opacity track the same normalized
+  // affinity weight the layout uses, so a bolder line always means "closer".
   for (const e of edges) {
-    const a = pos[idx.get(e.from)],
-      b = pos[idx.get(e.to)];
-    const touchesFocus = focusId && (e.from === focusId || e.to === focusId);
+    const a = pos[idx.get(e.a)],
+      b = pos[idx.get(e.b)];
+    const touchesFocus = focusId && (e.a === focusId || e.b === focusId);
     const faded = focusId && !touchesFocus;
-    const op = faded ? 0.04 : 0.18 + 0.55 * (e.count / maxEdge);
-    const sw = (0.7 + 3 * (e.count / maxEdge)).toFixed(2);
-    svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent)" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"></line>`;
+    const op = faded ? 0.04 : 0.12 + 0.6 * e.w;
+    const sw = (0.6 + 3.2 * e.w).toFixed(2);
+    const na = escHtml(nameOf.get(e.a) || e.a);
+    const nb = escHtml(nameOf.get(e.b) || e.b);
+    svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="var(--accent)" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"><title>${na} ↔ ${nb}: ${e.raw.toLocaleString()} replies (${na}→${nb} ${e.ab.toLocaleString()}, ${nb}→${na} ${e.ba.toLocaleString()})</title></line>`;
   }
   // Nodes + labels on top.
   nodes.forEach((n, i) => {
@@ -303,7 +363,16 @@ function networkSvg(net, focusId) {
     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;
   });
-  return svg + '</g></svg>';
+  svg += '</g></svg>';
+
+  // Legend (plain HTML under the SVG, so it never pans/zooms with the graph):
+  // decodes node size and line weight for a first-time viewer.
+  const legend =
+    `<div class="net-legend" style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);margin-top:2px;">` +
+    `<span><svg width="30" height="12" style="vertical-align:middle"><circle cx="6" cy="6" r="3" fill="var(--accent)" fill-opacity="0.9"></circle><circle cx="21" cy="6" r="5.5" fill="var(--accent)" fill-opacity="0.9"></circle></svg> bigger = more messages</span>` +
+    `<span><svg width="38" height="12" style="vertical-align:middle"><line x1="2" y1="6" x2="15" y2="6" stroke="var(--accent)" stroke-width="1"></line><line x1="21" y1="6" x2="36" y2="6" stroke="var(--accent)" stroke-width="3.5"></line></svg> thicker / closer = stronger two-way reply bond</span>` +
+    `</div>`;
+  return svg + legend;
 }
 
 function replyPartnersHtml(stats, focusId) {
