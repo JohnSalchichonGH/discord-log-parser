@@ -59,7 +59,9 @@ export function Technical() {
           const tokens = Math.round(b.chars / 4);
           return (
             <div class="chart-bar-row" key={b.uid}>
-              <span class="chart-bar-label">{nameOf(b.uid)}</span>
+              <span class="chart-bar-label" title={nameOf(b.uid)}>
+                {nameOf(b.uid)}
+              </span>
               <div class="chart-bar-track">
                 <div
                   class="chart-bar-fill"

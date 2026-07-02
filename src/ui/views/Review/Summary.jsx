@@ -87,7 +87,9 @@ export function Summary() {
           const color = BAR_COLORS[i % BAR_COLORS.length];
           return (
             <div class="chart-bar-row" key={uid}>
-              <span class="chart-bar-label">{nameOf(uid)}</span>
+              <span class="chart-bar-label" title={nameOf(uid)}>
+                {nameOf(uid)}
+              </span>
               <div class="chart-bar-track">
                 <div
                   class="chart-bar-fill"

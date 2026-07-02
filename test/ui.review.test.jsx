@@ -82,7 +82,9 @@ describe('Review Summary card', () => {
     const { container } = render(h(Summary, {}));
     const html = container.querySelector('#userChart').innerHTML;
     expect(window.__x).toBeUndefined();
-    expect(html).not.toContain('<img src=x onerror');
+    // The name is escaped in the visible label text and (safely, quote-escaped)
+    // in the title tooltip, so no real <img> element is ever created.
+    expect(container.querySelector('img')).toBeNull();
     expect(html).toContain('&lt;img');
   });
 });

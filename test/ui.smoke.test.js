@@ -127,7 +127,9 @@ describe('UI wiring smoke test', () => {
 
     const chartHtml = document.getElementById('userChart').innerHTML;
     expect(window.__xss).toBeUndefined();
-    expect(chartHtml).not.toContain('<img src=x onerror');
+    // Escaped in the visible label text and (safely, quote-escaped) in the title
+    // tooltip, so no real <img> element is ever created from the name.
+    expect(document.querySelector('#userChart img')).toBeNull();
     expect(chartHtml).toContain('&lt;img');
   });
 });
