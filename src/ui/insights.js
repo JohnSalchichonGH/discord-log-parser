@@ -179,22 +179,30 @@ function layout(nodes, edges, w, h, iters) {
     x: w / 2 + Math.cos((2 * Math.PI * i) / n) * w * 0.28,
     y: h / 2 + Math.sin((2 * Math.PI * i) / n) * h * 0.28,
   }));
+  // Node radii (match networkSvg) so repulsion can keep big circles apart by
+  // their SURFACES, not their centres — otherwise the biggest nodes pile up.
+  const maxCount = Math.max(1, ...nodes.map((nd) => nd.count));
+  const rad = (c) => 8 + 18 * Math.sqrt(c / maxCount);
+  const radOf = nodes.map((nd) => rad(nd.count));
+
   // Ideal separation, scaled down so a hub-and-spoke graph stays inside the
   // viewport instead of flinging its leaves to the walls.
-  const k = Math.sqrt((w * h) / n) * 0.5;
+  const k = Math.sqrt((w * h) / n) * 0.55;
   let temp = w * 0.15; // max step per iter, cooled linearly toward 0
   const cool = temp / (iters + 1);
 
   for (let it = 0; it < iters; it++) {
     const disp = pos.map(() => ({ x: 0, y: 0 }));
 
-    // Repulsion between every pair: fr = k² / d.
+    // Repulsion between every pair, measured from the surface gap so larger
+    // nodes reserve proportionally more room: fr = k² / gap.
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) {
         let dx = pos[i].x - pos[j].x,
           dy = pos[i].y - pos[j].y;
         const d = Math.hypot(dx, dy) || 0.01;
-        const fr = (k * k) / d;
+        const gap = Math.max(d - radOf[i] - radOf[j], 6);
+        const fr = (k * k) / gap;
         dx /= d;
         dy /= d;
         disp[i].x += dx * fr;
@@ -244,9 +252,7 @@ function layout(nodes, edges, w, h, iters) {
 
   // Final pass: separate any overlapping nodes so circles (and their labels)
   // never stack — including fully-overlapping disconnected pairs.
-  const maxCount = Math.max(1, ...nodes.map((nd) => nd.count));
-  const rad = (c) => 8 + 18 * Math.sqrt(c / maxCount);
-  for (let pass = 0; pass < 14; pass++) {
+  for (let pass = 0; pass < 24; pass++) {
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) {
         let dx = pos[i].x - pos[j].x,
@@ -258,7 +264,7 @@ function layout(nodes, edges, w, h, iters) {
           dy = 1;
           d = Math.hypot(dx, dy);
         }
-        const min = rad(nodes[i].count) + rad(nodes[j].count) + 6;
+        const min = radOf[i] + radOf[j] + 8;
         if (d < min) {
           const push = (min - d) / 2;
           dx /= d;
@@ -273,6 +279,27 @@ function layout(nodes, edges, w, h, iters) {
       pos[i].x = Math.max(24, Math.min(w - 24, pos[i].x));
       pos[i].y = Math.max(20, Math.min(h - 42, pos[i].y));
     }
+  }
+
+  // Re-center: shift the whole graph so its bounding box sits in the middle of
+  // the frame (the sim can settle off to one side, especially with a detached
+  // cluster). Radii are included so nodes don't clip the edges; labels sit below
+  // a node, so the bottom margin is a little larger.
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    minX = Math.min(minX, pos[i].x - radOf[i]);
+    maxX = Math.max(maxX, pos[i].x + radOf[i]);
+    minY = Math.min(minY, pos[i].y - radOf[i]);
+    maxY = Math.max(maxY, pos[i].y + radOf[i] + 14);
+  }
+  const shiftX = (w - (minX + maxX)) / 2;
+  const shiftY = (h - (minY + maxY)) / 2;
+  for (let i = 0; i < n; i++) {
+    pos[i].x += shiftX;
+    pos[i].y += shiftY;
   }
   return pos;
 }
