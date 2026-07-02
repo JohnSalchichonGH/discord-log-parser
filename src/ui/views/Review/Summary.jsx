@@ -6,7 +6,8 @@
 // `id`/`data-explore-panel` are preserved so the Explore-tab CSS still reveals it.
 
 import { processResult, processedOutputs } from '../../store.js';
-import { BAR_COLORS, flattenOutputs, userCounts } from './stats.js';
+import { flattenOutputs, userCounts } from './stats.js';
+import { rankColor } from '../../colors.js';
 
 const dateFmt = (ts) =>
   ts.toLocaleDateString('en-US', {
@@ -84,7 +85,7 @@ export function Summary() {
       <div id="userChart">
         {topN.map(([uid, count], i) => {
           const pct = Math.max(2, (count / maxCount) * 100);
-          const color = BAR_COLORS[i % BAR_COLORS.length];
+          const color = rankColor(i);
           return (
             <div class="chart-bar-row" key={uid}>
               <span class="chart-bar-label" title={nameOf(uid)}>

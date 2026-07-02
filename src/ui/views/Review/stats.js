@@ -1,24 +1,8 @@
-// Shared helpers for the Preact Summary/Technical review cards. The bar palette
-// and the output-flattening match the legacy renderStats (app.js) verbatim so
-// the cards keep their exact appearance.
-
-export const BAR_COLORS = [
-  '#6c9eff',
-  '#5ccf7f',
-  '#e09a5c',
-  '#e06c6c',
-  '#a78bfa',
-  '#f472b6',
-  '#56c8e8',
-  '#4dd4a0',
-  '#f0a060',
-  '#b89cff',
-  '#40d0d0',
-  '#8cd460',
-  '#e88080',
-  '#70b0ff',
-  '#d088f0',
-];
+// Shared helpers for the Preact Summary/Technical review cards. Output-flattening
+// matches the legacy renderStats (app.js) verbatim. Leaderboard bar colors are
+// assigned by rank (ui/colors.js `rankColor`, keyed on the message-count order),
+// so a person's bar matches their reply-network node and every ranked user gets a
+// distinct color.
 
 // Flatten the per-group processed outputs into one chunk list + a merged userMap
 // (uid → display name), exactly as the legacy stats render did.

@@ -2,7 +2,7 @@
 // Hand-rolled SVG/HTML, theme-aware via the app's CSS variables (no chart deps).
 
 import { escHtml } from '../core/format.js';
-import { authorColor } from './colors.js';
+import { rankColor } from './colors.js';
 
 const $ = (id) => document.getElementById(id);
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // display order
@@ -114,8 +114,6 @@ function timelineSvg(timeline) {
   );
 }
 
-const BAR_COLORS = ['#6c9eff', '#5ccf7f', '#e09a5c', '#e06c6c', '#a78bfa'];
-
 function leaderboardHtml(users) {
   if (users.length === 0)
     return '<div style="color:var(--text-muted);font-size:13px;">No participants.</div>';
@@ -124,7 +122,7 @@ function leaderboardHtml(users) {
   return top
     .map((u, i) => {
       const pct = Math.max(2, Math.round((u.count / max) * 100));
-      const color = BAR_COLORS[i % BAR_COLORS.length];
+      const color = rankColor(i);
       return `<div class="chart-bar-row insight-clickable" data-uid="${escHtml(u.id)}" style="cursor:pointer;" title="${escHtml(u.name)} · ${u.words.toLocaleString()} words · ${u.media} media · ${u.replies} replies · ${u.activeDays} active days — click to focus">
         <span class="chart-bar-label" style="width:110px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(u.name)}</span>
         <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${color};">${u.count.toLocaleString()}</div></div>
@@ -346,11 +344,18 @@ export function buildNetwork(stats) {
     connected.add(p.a);
     connected.add(p.b);
   }
-  // Top connected users by message count (nodes are sized by messages).
+  // Top connected users by message count (nodes are sized by messages). Each
+  // node carries its global rank so it can be colored to match the leaderboard.
+  const rankOf = new Map(stats.users.map((u, i) => [u.id, i]));
   let nodes = stats.users
     .filter((u) => connected.has(u.id))
     .slice(0, 28)
-    .map((u) => ({ id: u.id, name: u.name, count: u.count }));
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      count: u.count,
+      rank: rankOf.get(u.id),
+    }));
   let nodeIds = new Set(nodes.map((n) => n.id));
 
   // Keep pairs whose both endpoints are shown and that clear the noise floor.
@@ -404,6 +409,7 @@ function networkSvg(net, focusId) {
   const pos = layout(nodes, edges, LW, LH, 220);
   const idx = new Map(nodes.map((n, i) => [n.id, i]));
   const nameOf = new Map(nodes.map((n) => [n.id, n.name]));
+  const colorOf = new Map(nodes.map((n) => [n.id, rankColor(n.rank)]));
   const maxCount = nodes[0].count || 1;
   const r = (c) => 8 + 18 * Math.sqrt(c / maxCount);
 
@@ -451,7 +457,7 @@ function networkSvg(net, focusId) {
     const sw = (0.6 + 3.2 * e.w).toFixed(2);
     const na = escHtml(nameOf.get(e.a) || e.a);
     const nb = escHtml(nameOf.get(e.b) || e.b);
-    defs += `<linearGradient id="ng${i}" gradientUnits="userSpaceOnUse" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"><stop offset="0" stop-color="${authorColor(e.a)}"></stop><stop offset="1" stop-color="${authorColor(e.b)}"></stop></linearGradient>`;
+    defs += `<linearGradient id="ng${i}" gradientUnits="userSpaceOnUse" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"><stop offset="0" stop-color="${colorOf.get(e.a)}"></stop><stop offset="1" stop-color="${colorOf.get(e.b)}"></stop></linearGradient>`;
     edgeStr += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="url(#ng${i})" stroke-opacity="${op.toFixed(3)}" stroke-width="${sw}"><title>${na} ↔ ${nb}: ${e.raw.toLocaleString()} replies (${na}→${nb} ${e.ab.toLocaleString()}, ${nb}→${na} ${e.ba.toLocaleString()})</title></line>`;
   });
   svg += `<defs>${defs}</defs><g class="net-vp">${edgeStr}`;
@@ -466,7 +472,7 @@ function networkSvg(net, focusId) {
       n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name,
     );
     svg += `<g class="net-node" data-uid="${escHtml(n.id)}" style="cursor:pointer" opacity="${o}"><title>${escHtml(n.name)} · ${n.count.toLocaleString()} messages</title>`;
-    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${authorColor(n.id)}" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
+    svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${colorOf.get(n.id)}" fill-opacity="${fillOp}" stroke="${isFocus ? 'var(--text-primary)' : 'var(--bg-secondary)'}" stroke-width="${isFocus ? 2.5 : 2}"></circle>`;
     // Halo (paint-order: stroke) keeps labels legible over nodes/edges.
     svg += `<text x="${p.x.toFixed(1)}" y="${(p.y + rad + 12).toFixed(1)}" font-size="11" text-anchor="middle" paint-order="stroke" stroke="var(--bg-secondary)" stroke-width="3" stroke-linejoin="round" fill="var(--text-secondary)">${label}</text>`;
     svg += `</g>`;

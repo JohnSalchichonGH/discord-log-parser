@@ -6,7 +6,8 @@
 
 import { processResult, processedOutputs } from '../../store.js';
 import { settings } from '../../settings.js';
-import { BAR_COLORS, flattenOutputs, userCounts } from './stats.js';
+import { flattenOutputs, userCounts } from './stats.js';
+import { rankColor } from '../../colors.js';
 
 // Characters a chunk contributes to the budget — the joined parts plus a small
 // per-message overhead, matching the legacy estimate.
@@ -55,7 +56,7 @@ export function Technical() {
         </div>
         {bars.map((b, i) => {
           const pct = Math.max(1, (b.chars / maxChars) * 100);
-          const color = BAR_COLORS[i % BAR_COLORS.length];
+          const color = rankColor(i);
           const tokens = Math.round(b.chars / 4);
           return (
             <div class="chart-bar-row" key={b.uid}>
