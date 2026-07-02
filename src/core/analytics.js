@@ -37,6 +37,19 @@ function replyTarget(parts) {
   return null;
 }
 
+// The media tokens the parsers actually emit (html/json/txt). Any other
+// bracketed all-caps token — e.g. system-message content wrapped as "[OOOOOOOO]"
+// by html.js — is NOT media and must not pollute the media breakdown.
+const MEDIA_TYPES = new Set([
+  'IMG',
+  'GIF',
+  'VID',
+  'MEDIA',
+  'YT',
+  'EMBED',
+  'STICKER',
+]);
+
 const D = (d, tz) => (tz === 'local' ? d.getDay() : d.getUTCDay()); // 0=Sun..6=Sat
 const H = (d, tz) => (tz === 'local' ? d.getHours() : d.getUTCHours());
 function dayKey(d, tz) {
@@ -107,10 +120,10 @@ export function computeAnalytics(messages, opts = {}) {
     if (ms > u.lastSeen) u.lastSeen = ms;
     u.days.add(dk);
 
-    // Media token types
+    // Media token types (whitelisted; non-media bracketed tokens are ignored)
     for (const p of m.contentParts) {
       const mm = p.match(/^\[([A-Z]+)(?::|\])/);
-      if (mm) media[mm[1]] = (media[mm[1]] || 0) + 1;
+      if (mm && MEDIA_TYPES.has(mm[1])) media[mm[1]] = (media[mm[1]] || 0) + 1;
     }
 
     // Reactions

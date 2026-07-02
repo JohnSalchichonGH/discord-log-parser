@@ -78,6 +78,25 @@ describe('computeAnalytics', () => {
     expect(a.replyEdges).toContainEqual({ from: 'U2', to: 'U1', count: 1 });
   });
 
+  it('counts only whitelisted media types, ignoring other bracketed tokens', () => {
+    const b = computeAnalytics(
+      [
+        msg({ contentParts: ['[IMG: a.png]'] }),
+        msg({ contentParts: ['[VID: b.mp4]'] }),
+        msg({ contentParts: ['[STICKER]'] }),
+        msg({ contentParts: ['[YT: clip]'] }),
+        // Non-media bracketed tokens (e.g. system-message content wrapped by
+        // the HTML parser) must not appear as media categories.
+        msg({ contentParts: ['[OOOOOOOO]'] }),
+        msg({ contentParts: ['[PINNED]'] }),
+      ],
+      { tz: 'utc' },
+    );
+    expect(b.media).toEqual({ IMG: 1, VID: 1, STICKER: 1, YT: 1 });
+    expect(b.media).not.toHaveProperty('OOOOOOOO');
+    expect(b.media).not.toHaveProperty('PINNED');
+  });
+
   it('supports local-timezone bucketing', () => {
     const local = computeAnalytics(messages, { tz: 'local' });
     expect(local.tz).toBe('local');

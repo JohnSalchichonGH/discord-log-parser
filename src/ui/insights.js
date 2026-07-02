@@ -49,7 +49,7 @@ function heatmapSvg(heatmap) {
   const cell = 22,
     gap = 4,
     lab = 38,
-    both = 16;
+    both = 36; // room for the hour axis + a color legend row
   const w = lab + 24 * (cell + gap);
   const h = 7 * (cell + gap) + both;
   let s = `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Activity by weekday and hour">`;
@@ -66,6 +66,22 @@ function heatmapSvg(heatmap) {
   [0, 6, 12, 18, 23].forEach((hr) => {
     s += `<text x="${lab + hr * (cell + gap)}" y="${7 * (cell + gap) + 11}" font-size="10" fill="var(--text-muted)">${hr}</text>`;
   });
+
+  // Color legend (Less → More) with numeric context for the busiest cell.
+  const legTop = 7 * (cell + gap) + 20;
+  const legText = legTop + 9;
+  s += `<text x="0" y="${legText}" font-size="10" fill="var(--text-muted)">max ${max}/hr</text>`;
+  const sw = 13,
+    sh = 11,
+    steps = [0.3, 0.52, 0.74, 1];
+  let lx = w - (28 + steps.length * (sw + 2) + 34);
+  s += `<text x="${lx}" y="${legText}" font-size="10" fill="var(--text-muted)">Less</text>`;
+  lx += 26;
+  for (const op of steps) {
+    s += `<rect x="${lx}" y="${legTop}" width="${sw}" height="${sh}" rx="2" fill="var(--accent)" fill-opacity="${op}" stroke="var(--border)" stroke-width="0.5"></rect>`;
+    lx += sw + 2;
+  }
+  s += `<text x="${lx + 4}" y="${legText}" font-size="10" fill="var(--text-muted)">More</text>`;
   return s + '</svg>';
 }
 
