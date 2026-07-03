@@ -28,7 +28,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - **Identity: labels now track the most recently EXPORTED nickname.** DCE
   stamps every message with the author's name as of export time (constant per
   file), but labels were picked from whichever file contained the person's
-  newest *message* — so an active channel exported a year ago (old nick, new
+  newest _message_ — so an active channel exported a year ago (old nick, new
   messages) outvoted a quiet channel exported yesterday (new nick, old
   messages). Names are now ranked by the file's export recency — JSON's
   `exportedAt` when present, else the file's newest message — so the freshest
