@@ -46,7 +46,7 @@ describe('UI wiring smoke test', () => {
     fireEvent.input(document.getElementById('maxTokens'), {
       target: { value: '200000' },
     });
-    expect(document.getElementById('maxCharsLabel').textContent).toBe('800K');
+    expect(document.getElementById('maxCharsLabel').textContent).toBe('520K');
   });
 
   it('reveals the min-messages input when low-activity filter is toggled', () => {

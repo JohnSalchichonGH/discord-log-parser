@@ -20,6 +20,7 @@ import {
   enableAccurate,
   disableAccurate,
 } from '../../core/token-config.js';
+import { charsForTokens } from '../../core/tokens.js';
 
 const Icon = ({ children }) => (
   <svg
@@ -34,10 +35,10 @@ const Icon = ({ children }) => (
   </svg>
 );
 
-// Character-budget label derived from the token count (≈ 4 chars/token).
+// Character-budget label derived from the token count (chat-calibrated ratio).
 function charLabel(maxTokens) {
   const t = Math.max(1000, parseInt(maxTokens) || 1375000);
-  const c = t * 4;
+  const c = charsForTokens(t);
   return c >= 1e6 ? (c / 1e6).toFixed(1) + 'M' : (c / 1e3).toFixed(0) + 'K';
 }
 
@@ -115,7 +116,7 @@ export function Configure() {
             checked={getSetting('useAccurateTokens')}
             onChange={onAccurate}
             label="Accurate token counting"
-            desc="Use a real BPE tokenizer instead of the 1 token ≈ 4 chars estimate"
+            desc="Use a real BPE tokenizer instead of the built-in estimate (exact, but slower on huge logs)"
           />
         )}
       </div>

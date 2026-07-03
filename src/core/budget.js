@@ -26,15 +26,36 @@ export function legendReserve(userCount) {
 // `measure` is the real renderer, so the result is guaranteed to fit (unless the
 // retained priority messages alone already exceed the budget, in which case we
 // keep them — "always keep" wins over the budget).
+//
+// Dropping more oldest-first non-priority messages only shrinks the rendered
+// output, so "fits after dropping k" is monotonic in k — binary-search the
+// smallest such k (O(log n) measures). The old drop-one-measure-everything loop
+// re-rendered (and, in accurate mode, re-tokenized) the ENTIRE output once per
+// dropped message; over-filled runs at large budgets needed tens of thousands
+// of full-text passes and never finished.
 export function fitToBudget(messages, maxChars, prioritySet, measure) {
   if (measure(messages) <= maxChars) return messages;
-  const result = messages.slice();
-  while (result.length > 0 && measure(result) > maxChars) {
-    const idx = result.findIndex((m) => !prioritySet.has(m));
-    if (idx === -1) break; // only priority messages remain
-    result.splice(idx, 1);
+  // Indices of droppable (non-priority) messages, oldest first.
+  const droppable = [];
+  for (let i = 0; i < messages.length; i++)
+    if (!prioritySet.has(messages[i])) droppable.push(i);
+  const withoutFirst = (k) => {
+    if (k === 0) return messages;
+    const gone = new Set(droppable.slice(0, k));
+    return messages.filter((_, i) => !gone.has(i));
+  };
+  // Smallest k in [1, n] that fits; if even dropping all non-priority messages
+  // doesn't fit, keep the priority-only set ("always keep" wins).
+  let lo = 1;
+  let hi = droppable.length;
+  if (hi === 0 || measure(withoutFirst(hi)) > maxChars)
+    return withoutFirst(droppable.length);
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (measure(withoutFirst(mid)) <= maxChars) hi = mid;
+    else lo = mid + 1;
   }
-  return result;
+  return withoutFirst(lo);
 }
 
 // Add back excluded messages while the real measure still fits. The greedy fill

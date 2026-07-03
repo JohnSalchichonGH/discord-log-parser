@@ -8,6 +8,7 @@
 // effect in app.js (until they migrate to Preact in Phase 6).
 
 import { localDate } from '../core/time.js';
+import { charsForTokens } from '../core/tokens.js';
 import { buildGroups } from '../core/grouping.js';
 import { processGroup, buildIdentity } from '../core/pipeline.js';
 import { ensureFileContents } from './files.js';
@@ -75,7 +76,9 @@ export function runProcessing() {
 
       const cfg = snapshotSettings();
       const maxTokens = Math.max(1000, parseInt(cfg.maxTokens) || 1375000);
-      const maxChars = maxTokens * 4;
+      // Sizes the greedy fill only; the verify pass measures real (estimated
+      // or BPE) tokens against maxTokens.
+      const maxChars = charsForTokens(maxTokens);
       const minMsgs = cfg.filterLowActivity
         ? Math.max(1, parseInt(cfg.minMessages) || 10)
         : 0;

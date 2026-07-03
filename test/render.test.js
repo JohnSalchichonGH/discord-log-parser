@@ -200,9 +200,15 @@ describe('renderHTML', () => {
 });
 
 describe('tokens', () => {
-  it('approximates 1 token per 4 chars', () => {
-    expect(estimateTokensFromChars(400)).toBe(100);
-    expect(estimateTokens('x'.repeat(40))).toBe(10);
-    expect(charsForTokens(100)).toBe(400);
+  it('uses the chat-calibrated chars/token ratio for sizing', () => {
+    expect(estimateTokensFromChars(260)).toBe(100); // 2.6 chars/token
+    expect(charsForTokens(100)).toBe(260);
+  });
+
+  it('estimates by text shape, not raw length', () => {
+    expect(estimateTokens('hello')).toBe(1); // one short word
+    expect(estimateTokens('123456')).toBe(2); // digits group ~3/token
+    // A long unbroken run splits roughly every ~6 chars.
+    expect(estimateTokens('x'.repeat(40))).toBe(6);
   });
 });

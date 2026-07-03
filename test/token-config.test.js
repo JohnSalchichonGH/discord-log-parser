@@ -9,8 +9,8 @@ import {
 
 // Module state is isolated per test file in Vitest, so this file owns the config.
 describe('token-config', () => {
-  it('defaults to the char/4 approximation', () => {
-    expect(countTokens('x'.repeat(40))).toBe(10);
+  it('defaults to the calibrated estimator', () => {
+    expect(countTokens('x'.repeat(40))).toBe(6);
     expect(hasAccurate()).toBe(false);
   });
 
@@ -22,6 +22,6 @@ describe('token-config', () => {
     expect(countTokens('abcd')).toBe(4);
 
     disableAccurate();
-    expect(countTokens('x'.repeat(40))).toBe(10);
+    expect(countTokens('x'.repeat(40))).toBe(6);
   });
 });

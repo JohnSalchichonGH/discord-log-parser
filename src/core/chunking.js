@@ -2,9 +2,10 @@
 // Uses the same conservative per-message cost as the budget trim (A7).
 
 import { messageCost, legendReserve } from './budget.js';
+import { charsForTokens } from './tokens.js';
 
 export function chunkMessages(allMsgs, maxTokens, overlap) {
-  const maxChars = maxTokens * 4;
+  const maxChars = charsForTokens(maxTokens);
   const headerBudget = legendReserve(0);
   const chunks = [];
   let start = 0;

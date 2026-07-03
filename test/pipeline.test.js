@@ -507,10 +507,11 @@ describe('chunkMessages', () => {
       contentParts: ['x'.repeat(300)],
       timestamp: new Date(2025, 0, 1, 0, i),
     }));
-    // headerBudget=200, messageCost≈317/msg. maxChars=3000 fits 8 msgs/chunk.
+    // headerBudget=200, messageCost≈317/msg. maxChars=750x2.6=1950 fits
+    // floor(1750/317)=5 msgs/chunk.
     const chunks = chunkMessages(msgs, 750, 2);
     expect(chunks.length).toBeGreaterThan(1);
-    expect(chunks[0]).toHaveLength(8);
+    expect(chunks[0]).toHaveLength(5);
     // overlap=2: the last 2 of a chunk are the first 2 of the next.
     expect(chunks[0].slice(-2)).toEqual(chunks[1].slice(0, 2));
   });

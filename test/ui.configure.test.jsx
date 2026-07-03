@@ -32,11 +32,11 @@ describe('Configure', () => {
 
   it('derives the character-budget label from max tokens', () => {
     const { getByText, container } = render(<Configure />);
-    expect(getByText('5.5M')).toBeTruthy(); // default 1,375,000 tokens
+    expect(getByText('3.6M')).toBeTruthy(); // default 1,375,000 tokens x 2.6
     const input = container.querySelector('#maxTokens');
     fireEvent.input(input, { target: { value: '200000' } });
     expect(getSetting('maxTokens')).toBe('200000');
-    expect(getByText('800K')).toBeTruthy();
+    expect(getByText('520K')).toBeTruthy();
   });
 
   it('sets max tokens from the model preset', () => {

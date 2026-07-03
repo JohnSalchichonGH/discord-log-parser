@@ -8,6 +8,10 @@ import { processResult, processedOutputs } from '../../store.js';
 import { settings } from '../../settings.js';
 import { flattenOutputs, userCounts } from './stats.js';
 import { rankColor } from '../../colors.js';
+import {
+  charsForTokens,
+  estimateTokensFromChars,
+} from '../../../core/tokens.js';
 
 // Characters a chunk contributes to the budget — the joined parts plus a small
 // per-message overhead, matching the legacy estimate.
@@ -20,8 +24,9 @@ export function Technical() {
   const nameOf = (uid) => userMap.get(uid) || uid;
 
   const sorted = userCounts(chunks);
-  const maxChars =
-    Math.max(1, parseInt(settings.value.maxTokens) || 1375000) * 4;
+  const maxChars = charsForTokens(
+    Math.max(1, parseInt(settings.value.maxTokens) || 1375000),
+  );
   const totalChars = chunks.reduce((s, c) => s + chunkChars(c), 0);
   const usedPct = Math.round((totalChars / maxChars) * 100);
 
@@ -51,13 +56,13 @@ export function Technical() {
         <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
           Budget used:{' '}
           <strong style="color:var(--text-primary);">{usedPct}%</strong> (~
-          {Math.round(totalChars / 4).toLocaleString()} /{' '}
-          {(maxChars / 4).toLocaleString()} tokens)
+          {estimateTokensFromChars(totalChars).toLocaleString()} /{' '}
+          {estimateTokensFromChars(maxChars).toLocaleString()} tokens)
         </div>
         {bars.map((b, i) => {
           const pct = Math.max(1, (b.chars / maxChars) * 100);
           const color = rankColor(i);
-          const tokens = Math.round(b.chars / 4);
+          const tokens = estimateTokensFromChars(b.chars);
           return (
             <div class="chart-bar-row" key={b.uid}>
               <span class="chart-bar-label" title={nameOf(b.uid)}>

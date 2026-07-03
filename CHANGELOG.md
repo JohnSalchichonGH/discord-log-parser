@@ -18,6 +18,19 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Token budgets are now accurate without the BPE tokenizer.** The default
+  estimate assumed 4 chars/token (English prose), but chat text runs ~2.4 —
+  so a "1M token" export could really be ~1.7M tokens. The estimator now walks
+  the text in BPE-shaped segments (words, digit runs, whitespace, emoji,
+  punctuation), calibrated against the real `cl100k_base` tokenizer and pinned
+  by tests: a 1M budget now renders to ~0.99M real tokens (was ~1.7M). Note:
+  different models' tokenizers vary a few percent either way.
+- **The accurate (BPE) tokenizer path finishes now.** The budget trim dropped
+  messages one at a time, re-rendering and re-tokenizing the ENTIRE output per
+  dropped message — over-filled runs at large budgets needed tens of thousands
+  of full passes and effectively never completed. The trim now binary-searches
+  the drop count (identical result): a 1M-token accurate trim over 220k
+  messages completes in ~6 seconds, landing within 0.01% of the budget.
 - **Merging: which copy of a message survives is now deterministic and
   format-aware.** When the same message appears in several exports, the JSON
   copy wins over HTML (raw markdown over rendered text), and within a format

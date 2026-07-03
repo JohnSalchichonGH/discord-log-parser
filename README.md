@@ -159,7 +159,9 @@ display.
 - `.txt` timestamps are parsed in local time (what Discord showed the exporter), and
   `.txt` reactions carry no counts (so `^{👍}`, not `^{👍:3}`).
 - Edited messages reflect only the version present at export time.
-- The default build uses a `1 token ≈ 4 chars` estimate. For exact counts, use
+- The default build estimates tokens with a chat-calibrated heuristic
+  (within a few percent of real GPT `cl100k_base` counts; other models'
+  tokenizers vary). For exact counts, use
   `dist/index-accurate.html` (real GPT `cl100k_base` BPE tokenizer, opt-in toggle).
 - Token-budget trimming is calibrated for the Compact TXT output; the JSON/Markdown/
   CSV/HTML formats and chunk sizes may run larger than the selected budget.
