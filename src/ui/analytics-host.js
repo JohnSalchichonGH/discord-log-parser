@@ -15,6 +15,7 @@
 
 import { escHtml } from '../core/format.js';
 import { getFilteredConversation } from '../core/pipeline.js';
+import { ensureFileContents } from './files.js';
 import { computeAnalytics } from '../core/analytics.js';
 import {
   renderInsights,
@@ -88,6 +89,7 @@ async function requestAnalytics(files, opts, tz) {
       markWorkerBroken();
     }
   }
+  await ensureFileContents(files); // released copies re-read for inline parse
   const { filtered } = getFilteredConversation(files, opts);
   return computeAnalytics(filtered, { tz });
 }
@@ -114,6 +116,7 @@ async function requestMessages(files, opts) {
       markWorkerBroken();
     }
   }
+  await ensureFileContents(files); // released copies re-read for inline parse
   const { filtered, userMap } = getFilteredConversation(files, opts);
   return {
     messages: filtered.map((m) => ({

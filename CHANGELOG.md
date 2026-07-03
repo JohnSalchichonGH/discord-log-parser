@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Uploading many large files no longer risks running out of memory.** File
+  text used to be held twice forever (page + worker) and posted to the worker
+  as one giant message; parsed messages also duplicated author strings once per
+  message. Now uploads stream to the worker one file at a time, both sides
+  release a file's text as soon as it is parsed (the page keeps the File handle
+  and re-reads on demand for the accurate-tokenizer / no-worker paths), and
+  repeated strings are interned at parse time. Uploading ~150 MB of exports now
+  leaves the page's memory flat instead of holding multiple copies.
+
 ### Fixed
 
 - **Merging: which copy of a message survives is now deterministic and

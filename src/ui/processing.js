@@ -10,6 +10,7 @@
 import { localDate } from '../core/time.js';
 import { buildGroups } from '../core/grouping.js';
 import { processGroup, buildIdentity } from '../core/pipeline.js';
+import { ensureFileContents } from './files.js';
 import {
   countTokens,
   enableAccurate,
@@ -194,6 +195,9 @@ export async function computeOutputs(validFiles, opts, useAccurate) {
     }
   }
 
+  // Inline (main-thread) path: content strings may have been released once the
+  // worker took the parse — re-read them from the File handles first.
+  await ensureFileContents(validFiles);
   const groups = buildGroups(validFiles);
   const fullOpts = { ...opts, countTokens };
   // One global identity across all files (matches the worker path).

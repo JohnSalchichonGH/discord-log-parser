@@ -19,6 +19,7 @@ import {
   assembleGroup,
   applyMessageFilters,
   trimGroup,
+  sniffExportedAt,
 } from './core/pipeline.js';
 import { computeAnalytics } from './core/analytics.js';
 import { countTokens, disableAccurate } from './core/token-config.js';
@@ -97,22 +98,37 @@ self.onmessage = (e) => {
   const _id = msg._id;
   const post = (obj) => self.postMessage({ ...obj, _id });
   try {
-    if (msg.type === 'setFiles') {
-      // Drop files no longer present; parse (and cache) any new ones. The
-      // assembled conversation is invalidated by its key when files change, but
-      // evict eagerly so removed files' assembly doesn't linger in memory.
+    if (msg.type === 'addFile') {
+      // One file per message (the main thread streams uploads one at a time to
+      // avoid a single giant structured-clone buffer). Parse immediately, then
+      // RELEASE the content string — after _raw exists it's dead weight, and at
+      // 50-file scale it's hundreds of MB. exportedAt (label recency) is the
+      // one thing read from content later, so capture it before the release.
+      if (!cache.has(msg.key)) {
+        const entry = {
+          content: msg.content,
+          isTxt: msg.isTxt,
+          isJson: msg.isJson,
+        };
+        getRawMessages(entry); // parses + memoizes entry._raw
+        entry._exportedAt = msg.isJson ? sniffExportedAt(msg.content) : null;
+        entry.content = null;
+        cache.set(msg.key, entry);
+      }
+      post({ type: 'fileAdded' });
+    } else if (msg.type === 'setFiles') {
+      // The authoritative file list (keys only — contents were streamed via
+      // addFile). Drop files no longer present; the assembled conversation is
+      // invalidated by its key when files change, but evict eagerly so removed
+      // files' assembly doesn't linger in memory.
       const keep = new Set(msg.files.map((f) => f.key));
       for (const k of [...cache.keys()]) if (!keep.has(k)) cache.delete(k);
       assembled = null;
 
       const authors = new Map();
       for (const f of msg.files) {
-        let entry = cache.get(f.key);
-        if (!entry) {
-          entry = { content: f.content, isTxt: f.isTxt, isJson: f.isJson };
-          getRawMessages(entry); // parses + memoizes entry._raw
-          cache.set(f.key, entry);
-        }
+        const entry = cache.get(f.key);
+        if (!entry) throw new Error('worker cache miss: ' + f.key);
         for (const m of entry._raw)
           authors.set(m.authorName, (authors.get(m.authorName) || 0) + 1);
       }

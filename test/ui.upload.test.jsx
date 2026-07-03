@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, fireEvent, cleanup, waitFor } from '@testing-library/preact';
 import { Upload } from '../src/ui/views/Upload.jsx';
+import { ensureFileContents } from '../src/ui/files.js';
 import {
   loadedFiles,
   authorEntries,
@@ -97,6 +98,27 @@ describe('Upload', () => {
     await waitFor(() =>
       expect(container.querySelectorAll('.merge-group')).toHaveLength(1),
     );
+  });
+
+  it('re-reads a released content string from the kept File handle', async () => {
+    // Once the worker owns a file's parse, the main thread releases the content
+    // string but keeps the File handle; inline paths (accurate tokens / broken
+    // worker) call ensureFileContents to restore it on demand.
+    const text = mkJson('1', 'general', 'alice');
+    const entry = {
+      name: 'G - general [1].json',
+      content: null, // released
+      file: new File([text], 'G - general [1].json', {
+        type: 'application/json',
+      }),
+    };
+    await ensureFileContents([entry]);
+    expect(entry.content).toBe(text);
+    // Entries that still hold content (or invalid ones without a handle) are
+    // left untouched.
+    const kept = { name: 'x', content: 'already here', file: null };
+    await ensureFileContents([kept]);
+    expect(kept.content).toBe('already here');
   });
 
   it('select all / deselect all toggles every group', async () => {

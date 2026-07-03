@@ -76,9 +76,14 @@ function readFile(file) {
         isTxt,
         isJson,
         content,
+        // The File handle, so content can be re-read on demand after it is
+        // released (see ensureFileContents) — handles stay readable for the
+        // life of the page and cost nothing to hold.
+        file,
         channelId: meta.channelId,
         baseName: meta.baseName,
         sortOrder: file.lastModified,
+        lastModified: file.lastModified,
         afterDate: meta.afterDate,
         size: file.size,
         invalid,
@@ -91,9 +96,11 @@ function readFile(file) {
         isTxt,
         isJson,
         content: '',
+        file,
         channelId: file.name,
         baseName: file.name,
         sortOrder: file.lastModified,
+        lastModified: file.lastModified,
         afterDate: null,
         size: file.size,
         invalid: true,
@@ -103,19 +110,66 @@ function readFile(file) {
   });
 }
 
+// Re-read any released content strings from their File handles. The content is
+// released once the worker owns the parse (the common case); the main-thread
+// (inline) paths — accurate-token processing, or a broken worker — call this
+// first so getRawMessages can parse locally again.
+export async function ensureFileContents(files) {
+  await Promise.all(
+    files.map(async (f) => {
+      if (f.content == null && f.file) {
+        f.content = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = (e) => resolve(e.target.result);
+          r.onerror = () => reject(new Error('Could not re-read ' + f.name));
+          r.readAsText(f.file);
+        });
+      }
+    }),
+  );
+}
+
 // Add a batch of File objects, skipping ones already loaded (same name + size),
 // then refresh the derived author/summary state.
+//
+// Files are read and handed to the worker ONE AT A TIME, and each content
+// string is released as soon as the worker has parsed it — so the peak memory
+// during a 50-file upload is one file's text (plus its clone buffer), not the
+// whole set held twice plus a giant single postMessage. Without a worker the
+// contents are kept for the inline (main-thread) pipeline.
 export async function addFiles(files) {
   const existing = loadedFiles.value;
   const fresh = files.filter(
     (file) =>
       !existing.find((f) => f.name === file.name && f.size === file.size),
   );
-  if (fresh.length) {
-    const entries = await Promise.all(fresh.map(readFile));
-    loadedFiles.value = [...existing, ...entries];
+  for (const file of fresh) {
+    const entry = await readFile(file);
+    if (!entry.invalid) await offloadToWorker(entry);
+    // Progressive list update — big batches appear as they load.
+    loadedFiles.value = [...loadedFiles.value, entry];
   }
   await refresh();
+}
+
+// Hand one file's content to the worker (which parses and keeps the result),
+// then release the main-thread copy; the File handle remains for re-reads. On
+// failure the worker is marked broken and the content stays for inline use.
+async function offloadToWorker(entry) {
+  const w = getWorker();
+  if (!w) return;
+  try {
+    await workerRequest(w, {
+      type: 'addFile',
+      key: fileKey(entry),
+      content: entry.content,
+      isTxt: entry.isTxt,
+      isJson: entry.isJson,
+    });
+    entry.content = null;
+  } catch {
+    markWorkerBroken();
+  }
 }
 
 export async function removeFile(idx) {
@@ -142,7 +196,8 @@ export async function mergeGroups(selectedKeys) {
 }
 
 // Author name → message count, computed on the main thread from cached parses.
-function inlineAuthors(valid) {
+async function inlineAuthors(valid) {
+  await ensureFileContents(valid); // released copies re-read from File handles
   const m = new Map();
   for (const f of valid)
     for (const msg of getRawMessages(f))
@@ -166,22 +221,19 @@ async function refresh() {
   const w = getWorker();
   if (w) {
     try {
+      // Contents were already streamed per-file (addFile); this is just the
+      // authoritative key list, so removals evict on the worker side too.
       const res = await workerRequest(w, {
         type: 'setFiles',
-        files: valid.map((f) => ({
-          key: fileKey(f),
-          content: f.content,
-          isTxt: f.isTxt,
-          isJson: f.isJson,
-        })),
+        files: valid.map((f) => ({ key: fileKey(f) })),
       });
       entries = res.authors;
     } catch {
       markWorkerBroken();
-      entries = inlineAuthors(valid);
+      entries = await inlineAuthors(valid);
     }
   } else {
-    entries = inlineAuthors(valid);
+    entries = await inlineAuthors(valid);
   }
   authorEntries.value = entries.slice().sort((a, b) => b[1] - a[1]);
   selectedUsers.value = new Set();

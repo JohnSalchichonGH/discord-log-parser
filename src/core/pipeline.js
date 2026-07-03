@@ -18,40 +18,75 @@ import {
 } from './budget.js';
 import { renderTxt } from '../render/txt.js';
 
+// Intern the fields that repeat across a file's messages (author names,
+// usernames, reply targets) so 1.7M messages hold ~300 unique strings instead
+// of millions of equal copies — parsers/JSON.parse allocate a fresh string per
+// occurrence, and these live for the whole session in the parse cache.
+function internRaw(messages) {
+  const pool = new Map();
+  const it = (s) => {
+    if (typeof s !== 'string') return s;
+    const v = pool.get(s);
+    if (v !== undefined) return v;
+    pool.set(s, s);
+    return s;
+  };
+  for (const m of messages) {
+    m.authorName = it(m.authorName);
+    m.authorUsername = it(m.authorUsername);
+    m.authorKey = it(m.authorKey);
+    m.replyToName = it(m.replyToName);
+    m.replyToKey = it(m.replyToKey);
+  }
+  return messages;
+}
+
 // Parse a file's raw (userMap-independent) messages once and memoize them on the
 // file object, so re-processing after a settings change never re-parses (B2).
 export function getRawMessages(f) {
   if (!f._raw) {
-    f._raw = f.isJson
-      ? parseJson(f.content)
-      : f.isTxt
-        ? parseTxt(f.content)
-        : parseHtml(f.content);
+    f._raw = internRaw(
+      f.isJson
+        ? parseJson(f.content)
+        : f.isTxt
+          ? parseTxt(f.content)
+          : parseHtml(f.content),
+    );
   }
   return f._raw;
 }
 
-// A file's export recency, used to rank which file's nicknames are freshest
-// (DCE stamps names at export time). JSON exports carry the exact instant in
-// their exportedAt metadata — sniffed from the content head, BEFORE the
-// messages array, so chat text can never spoof it. Other formats fall back to
-// the file's newest message timestamp (a lower bound on the export time).
-function fileExportRecency(f) {
-  if (f.isJson) {
-    const head = String(f.content);
-    const cut = head.indexOf('"messages"');
-    const m = head
-      .slice(0, cut >= 0 && cut < 8000 ? cut : 8000)
-      .match(/"exportedAt"\s*:\s*"([^"]+)"/);
-    if (m) {
-      const t = new Date(m[1]).getTime();
-      if (!isNaN(t)) return t;
-    }
+// The exportedAt instant a DCE JSON export carries in its metadata, or null.
+// Sniffed from the content head, BEFORE the messages array, so chat text can
+// never spoof it. Exported so the worker can capture it at parse time and then
+// release the content string.
+export function sniffExportedAt(content) {
+  const head = String(content);
+  const cut = head.indexOf('"messages"');
+  const m = head
+    .slice(0, cut >= 0 && cut < 8000 ? cut : 8000)
+    .match(/"exportedAt"\s*:\s*"([^"]+)"/);
+  if (m) {
+    const t = new Date(m[1]).getTime();
+    if (!isNaN(t)) return t;
   }
+  return null;
+}
+
+// A file's export recency, used to rank which file's nicknames are freshest
+// (DCE stamps names at export time). Prefers a pre-captured _exportedAt (set by
+// the worker before it releases the content string), then a live sniff when the
+// content is still around, then the file's newest message timestamp (a lower
+// bound on the export time).
+function fileExportRecency(f) {
+  let t = f._exportedAt;
+  if (t === undefined)
+    t = f.isJson && f.content ? sniffExportedAt(f.content) : null;
+  if (t != null) return t;
   let max = 0;
   for (const r of getRawMessages(f)) {
-    const t = r.timestamp ? r.timestamp.getTime() : 0;
-    if (t > max) max = t;
+    const ts = r.timestamp ? r.timestamp.getTime() : 0;
+    if (ts > max) max = ts;
   }
   return max;
 }
