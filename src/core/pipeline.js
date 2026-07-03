@@ -39,6 +39,47 @@ export function buildIdentity(files, useRealNames) {
   return buildUserMap(files.map(getRawMessages), useRealNames);
 }
 
+// Normalized text for cross-format matching (dedup signatures, the identity
+// bridge, and TXT clock anchoring). HTML exports carry RENDERED text (markdown
+// stripped by the renderer, custom/unicode emoji as <img> that contribute no
+// text), while JSON/TXT carry RAW markdown — so the same message reads
+// "**hi** :pog:" in one file and "hi" in another. Strip markdown syntax,
+// collapse [label](url) to its label, and drop emoji shortcodes/pictographs so
+// all three formats normalize to the same string. Signature-only: message
+// content is never modified.
+const EMOJI_RE = /\p{Extended_Pictographic}|[\u{FE0F}\u{200D}]/gu;
+function normText(parts) {
+  return (
+    parts
+      // Collapse markdown links BEFORE the media-token filter: a message that
+      // STARTS with "[label](url)" would otherwise be mistaken for a media
+      // token (they also start with "[") and dropped from the signature.
+      .map((p) => p.replace(/\[([^\]]*)\]\(\S*?\)/g, '$1'))
+      .filter((p) => !p.startsWith('[') && !p.startsWith('> '))
+      .map((p) => p.replace(/\^\{[^}]*\}/g, ''))
+      .join(' ')
+      .replace(/:[a-z0-9_+-]+:/gi, '')
+      .replace(EMOJI_RE, '')
+      .replace(/[*_~`|\\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+  );
+}
+// Memoized per assembled message (text parts never change after assembly; the
+// phases that rewrite reply tokens only touch "> " parts, which normText skips).
+// WeakMap rather than a property so the memo is never structured-cloned to the
+// main thread and dies with the message objects.
+const normCache = new WeakMap();
+function normOf(m) {
+  let t = normCache.get(m);
+  if (t === undefined) normCache.set(m, (t = normText(m.contentParts)));
+  return t;
+}
+// Texts this long are effectively unique per author+day; shorter ones ("lol",
+// "ok") collide by coincidence, so evidence-style matching only counts these.
+const DISTINCTIVE_LEN = 12;
+
 // Parse + assemble + dedup ONE channel group into its full conversation (the
 // expensive phases 1–2), WITHOUT the pre-filters. The result depends only on
 // the files and the identity model (useRealNames) — every pre-filter
@@ -53,6 +94,62 @@ export function assembleGroup(sortedFiles, useRealNames, identity) {
   const perFileMsgs = perFileRaw.map((rawList) =>
     rawList.map((r) => assembleMessage(r, uidOf)),
   );
+
+  // Phase 1.4: anchor each TXT file's clock to true UTC. TXT timestamps are the
+  // EXPORT machine's local wall clock, but parseTimestamp can only read them as
+  // the VIEWER's local time — if those timezones differ, every TXT message is
+  // shifted, which breaks ordering AND the UTC-day dedup key (duplicates leak in
+  // near midnight). Estimate each TXT file's offset from its own id-bearing
+  // twins: for messages whose (author + distinctive text) matches an id-bearing
+  // message nearby, take the median time delta, rounded to 5 minutes (real
+  // timezone offsets are multiples of 15). Only applied when the samples agree
+  // (>= 10 matches, >= 60% within ±90s of the estimate — the slack covers TXT's
+  // truncated seconds), so a file is never shifted on flimsy evidence; TXT-only
+  // groups are left untouched (nothing to anchor to).
+  const hasTxtFiles = sortedFiles.some((f) => f.isTxt);
+  const hasKeyedFiles = sortedFiles.some((f) => !f.isTxt);
+  if (hasTxtFiles && hasKeyedFiles) {
+    const byAuthorText = new Map(); // authorId \t text -> id-bearing times (ms)
+    for (let i = 0; i < perFileMsgs.length; i++) {
+      if (sortedFiles[i].isTxt) continue;
+      for (const m of perFileMsgs[i]) {
+        const t = normOf(m);
+        if (t.length < DISTINCTIVE_LEN) continue;
+        const k = m.authorId + '\t' + t;
+        let arr = byAuthorText.get(k);
+        if (!arr) byAuthorText.set(k, (arr = []));
+        arr.push(m.timestamp.getTime());
+      }
+    }
+    const DAY_WINDOW = 26 * 3600e3; // widest plausible tz gap, plus slack
+    for (let i = 0; i < perFileMsgs.length; i++) {
+      if (!sortedFiles[i].isTxt) continue;
+      const deltas = [];
+      for (const m of perFileMsgs[i]) {
+        const t = normOf(m);
+        if (t.length < DISTINCTIVE_LEN) continue;
+        const cands = byAuthorText.get(m.authorId + '\t' + t);
+        if (!cands) continue;
+        const ts = m.timestamp.getTime();
+        let best = null;
+        for (const c of cands) {
+          const d = ts - c;
+          if (best === null || Math.abs(d) < Math.abs(best)) best = d;
+        }
+        if (best !== null && Math.abs(best) <= DAY_WINDOW) deltas.push(best);
+      }
+      if (deltas.length < 10) continue;
+      deltas.sort((a, b) => a - b);
+      const median = deltas[deltas.length >> 1];
+      const offset = Math.round(median / 300000) * 300000; // nearest 5 min
+      if (offset === 0) continue; // already aligned
+      const close = deltas.filter((d) => Math.abs(d - offset) <= 90000).length;
+      if (close < deltas.length * 0.6) continue; // inconsistent — don't touch
+      for (const m of perFileMsgs[i])
+        m.timestamp = new Date(m.timestamp.getTime() - offset);
+    }
+  }
+
   // Phase 1.5: message-content identity bridge (only when TXT is mixed with an
   // id-bearing format). A renamed user can appear under different names across
   // exports — e.g. an older TXT shows an old nick, a newer JSON a new username —
@@ -60,21 +157,18 @@ export function assembleGroup(sortedFiles, useRealNames, identity) {
   // aliasing can't link them, so the SAME messages survive under two identities.
   // Link them by the messages themselves: a keyless (TXT) author whose messages
   // overwhelmingly match one id-bearing identity (same normalized text + UTC day)
-  // IS that identity. A strong-evidence guard (>= 8 matches AND a majority of
-  // that author's text messages) stops coincidental collisions from merging
-  // strangers — two people typing "lol" never accumulate to a majority.
-  if (sortedFiles.some((f) => f.isTxt) && sortedFiles.some((f) => !f.isTxt)) {
-    const bnorm = (parts) =>
-      parts
-        .filter((p) => !p.startsWith('[') && !p.startsWith('> '))
-        .map((p) => p.replace(/\^\{[^}]*\}/g, ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
+  // IS that identity. Only DISTINCTIVE texts count as evidence — long enough to
+  // be effectively unique per author+day — so coincidental collisions ("lol",
+  // "ok") can neither create nor pad a match. With that quality bar the volume
+  // bar can be low (>= 3 matches and >= 60% of the author's distinctive texts),
+  // which unifies renamed users who only overlap in a handful of messages
+  // instead of stranding them as a duplicate identity.
+  if (hasTxtFiles && hasKeyedFiles) {
     const ckey = (m) => {
-      const t = bnorm(m.contentParts);
-      return t ? t + '	' + m.timestamp.toISOString().slice(0, 10) : null;
+      const t = normOf(m);
+      return t.length >= DISTINCTIVE_LEN
+        ? t + '\t' + m.timestamp.toISOString().slice(0, 10)
+        : null;
     };
     const keyedAt = new Map(); // content+day -> id-bearing identity
     for (const msgs of perFileMsgs)
@@ -106,7 +200,7 @@ export function assembleGroup(sortedFiles, useRealNames, identity) {
           bestC = c;
           best = aid;
         }
-      if (best && bestC >= 8 && bestC >= 0.5 * (total.get(kl) || 0))
+      if (best && bestC >= 3 && bestC >= 0.6 * (total.get(kl) || 0))
         bridge.set(kl, best);
     }
     if (bridge.size)
@@ -183,31 +277,32 @@ export function assembleGroup(sortedFiles, useRealNames, identity) {
   // an HTML/JSON message is dropped, but a message only the TXT captured (e.g.
   // since-deleted) still survives. Legit same-text repeats within a file are
   // preserved by counting the max occurrences in any single file (B5).
-  const norm = (parts) =>
-    parts
-      .filter((p) => !p.startsWith('[') && !p.startsWith('> '))
-      .map((p) => p.replace(/\^\{[^}]*\}/g, ''))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
   const sigOf = (m) =>
-    `${m.authorId}\t${m.timestamp.toISOString().slice(0, 10)}\t${norm(m.contentParts)}`;
+    `${m.authorId}\t${m.timestamp.toISOString().slice(0, 10)}\t${normOf(m)}`;
 
-  // Pass A: dedup id-bearing messages by snowflake id; tally their signatures.
-  const seenIds = new Set();
+  // Pass A: dedup id-bearing messages by snowflake id, keeping the BEST copy of
+  // each: JSON over HTML (raw markdown over rendered text — richer content, and
+  // its signature is what a TXT twin will produce), and within a format the
+  // later file (so an edited message keeps the newest export's content). This
+  // is deterministic — file modification times no longer decide which copy of a
+  // message survives.
+  const bestById = new Map(); // messageId -> { m, rank, idx }
+  for (let i = 0; i < perFileMsgs.length; i++) {
+    const rank = sortedFiles[i].isJson ? 2 : sortedFiles[i].isTxt ? 0 : 1;
+    for (const m of perFileMsgs[i]) {
+      if (!m.messageId) continue;
+      const prev = bestById.get(m.messageId);
+      if (!prev || rank > prev.rank || (rank === prev.rank && i > prev.idx))
+        bestById.set(m.messageId, { m, rank, idx: i });
+    }
+  }
   const keyedSig = new Map(); // signature -> count among kept id-bearing messages
   const keyed = [];
-  for (const msgs of perFileMsgs)
-    for (const m of msgs) {
-      if (!m.messageId) continue;
-      const idk = `id:${m.messageId}`;
-      if (seenIds.has(idk)) continue;
-      seenIds.add(idk);
-      keyed.push(m);
-      const s = sigOf(m);
-      keyedSig.set(s, (keyedSig.get(s) || 0) + 1);
-    }
+  for (const { m } of bestById.values()) {
+    keyed.push(m);
+    const s = sigOf(m);
+    keyedSig.set(s, (keyedSig.get(s) || 0) + 1);
+  }
 
   // Pass B: keyless cap per signature = max per-file occurrences (handles TXT/TXT
   // overlap + legit repeats), minus what id-bearing messages already cover.

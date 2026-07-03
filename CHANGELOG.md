@@ -5,6 +5,33 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Merging: which copy of a message survives is now deterministic and
+  format-aware.** When the same message appears in several exports, the JSON
+  copy wins over HTML (raw markdown over rendered text), and within a format
+  the newest export wins (so an edited message keeps its latest wording).
+  Previously the oldest file by modification time won — arbitrarily, and with
+  a side effect: if an HTML copy was kept, its rendered text never matched the
+  TXT twin's raw markdown, leaking duplicates.
+- **Merging: TXT copies of formatted messages no longer duplicate.** Dedup
+  signatures now normalize across formats — markdown syntax stripped, links
+  collapsed to their label, custom-emoji shortcodes and emoji dropped — so the
+  rendered text an HTML export carries matches the raw markdown JSON/TXT carry.
+- **Merging: TXT files exported in a different timezone are re-anchored to
+  UTC.** TXT timestamps are the export machine's wall clock; when it differs
+  from the viewer's, every TXT message was shifted (wrong ordering, and
+  duplicates leaked near midnight where the dedup day-key missed). Each TXT
+  file's offset is now estimated from its own overlap with id-bearing exports
+  (median delta across ≥10 distinctive matches, applied only when consistent)
+  and the whole file is corrected. TXT-only groups are untouched.
+- **Identity: renamed users with only a few overlapping messages now unify.**
+  The message-content bridge counts only distinctive texts (≥12 chars) as
+  evidence and folds at ≥3 matches (was ≥8) — so a person whose old TXT nick
+  never appears in an id-bearing export no longer splits into a second identity
+  (with duplicated messages) just because the overlap was small. Short
+  coincidental texts ("lol") can no longer create or pad a match.
+
 ## [1.4.0] - 2026-06-30
 
 Completes the **Preact + Signals** rework begun in 1.3.0: the legacy `app.js`
