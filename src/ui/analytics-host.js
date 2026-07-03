@@ -125,6 +125,7 @@ async function requestMessages(files, opts) {
       ts: m.timestamp.getTime(),
       parts: m.contentParts,
       isSystem: m.isSystem,
+      hasReply: m.hasReply,
     })),
     userMap,
   };

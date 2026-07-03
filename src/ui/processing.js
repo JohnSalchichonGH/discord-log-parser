@@ -116,8 +116,13 @@ export function runProcessing() {
 
       const validFiles = loadedFiles.value.filter((f) => !f.invalid);
       const useAccurate = !!cfg.useAccurateTokens;
+      // Map the worker's per-group progress into the 40–75% band the bar spans
+      // during processing, so multi-channel runs advance instead of jumping.
+      const onProgress = (d) => {
+        if (d.total > 0) setProgress(40 + Math.round((d.done / d.total) * 35));
+      };
       const { outputs, totalMessages, totalFiltered, totalKept, engine } =
-        await computeOutputs(validFiles, opts, useAccurate);
+        await computeOutputs(validFiles, opts, useAccurate, onProgress);
 
       setProgress(75);
 
@@ -177,21 +182,30 @@ export function runProcessing() {
 // worker is approx-only). Returns { outputs, totalMessages, totalFiltered,
 // totalKept } with outputs[].finalChunks (Date timestamps) + userMap (Map)
 // preserved by structured clone.
-export async function computeOutputs(validFiles, opts, useAccurate) {
+export async function computeOutputs(
+  validFiles,
+  opts,
+  useAccurate,
+  onProgress,
+) {
   const w = !useAccurate ? getWorker() : null;
   if (w) {
     try {
-      const res = await workerRequest(w, {
-        type: 'process',
-        fileMeta: validFiles.map((f) => ({
-          key: fileKey(f),
-          channelId: f.channelId,
-          baseName: f.baseName,
-          sortOrder: f.sortOrder,
-          afterDate: f.afterDate,
-        })),
-        opts,
-      });
+      const res = await workerRequest(
+        w,
+        {
+          type: 'process',
+          fileMeta: validFiles.map((f) => ({
+            key: fileKey(f),
+            channelId: f.channelId,
+            baseName: f.baseName,
+            sortOrder: f.sortOrder,
+            afterDate: f.afterDate,
+          })),
+          opts,
+        },
+        onProgress,
+      );
       return { ...res, engine: 'worker' };
     } catch {
       markWorkerBroken(); // fall through to inline

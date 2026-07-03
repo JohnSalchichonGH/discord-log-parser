@@ -138,11 +138,26 @@ export async function ensureFileContents(files) {
 // whole set held twice plus a giant single postMessage. Without a worker the
 // contents are kept for the inline (main-thread) pipeline.
 export async function addFiles(files) {
-  const existing = loadedFiles.value;
-  const fresh = files.filter(
+  // Skip byte-identical re-drops (same name, size AND mtime). A re-export with
+  // the same name but changed content differs in size or lastModified, so it
+  // counts as fresh — matching the worker cache key (name|size|lastModified),
+  // which would otherwise never see the newer parse.
+  const fresh = [...files].filter(
     (file) =>
-      !existing.find((f) => f.name === file.name && f.size === file.size),
+      !loadedFiles.value.find(
+        (f) =>
+          f.name === file.name &&
+          f.size === file.size &&
+          f.lastModified === file.lastModified,
+      ),
   );
+  // Drop any stale entry a fresh file supersedes (same name), so a re-export
+  // replaces the old one instead of appearing twice.
+  const freshNames = new Set(fresh.map((f) => f.name));
+  if (freshNames.size)
+    loadedFiles.value = loadedFiles.value.filter(
+      (f) => !freshNames.has(f.name),
+    );
   for (const file of fresh) {
     const entry = await readFile(file);
     if (!entry.invalid) await offloadToWorker(entry);

@@ -51,9 +51,10 @@ function initials(name) {
 function renderContentLine(line, opts) {
   let s = escHtml(redactString(line, opts));
   // Media tokens -> chips (operate on the already-escaped string; tokens never
-  // contain HTML-special chars beyond what escHtml leaves intact).
+  // contain HTML-special chars beyond what escHtml leaves intact). The token set
+  // mirrors what the parsers emit — including bare "[STICKER]" (no colon).
   s = s.replace(
-    /\[(IMG|GIF|VID|MEDIA|YT|EMBED|FILE|AUDIO|Sticker|Attachment):[^\]]*\]/g,
+    /\[(IMG|GIF|VID|MEDIA|YT|EMBED|STICKER)(?::[^\]]*)?\]/g,
     (m) => `<span class="chip">${m}</span>`,
   );
   if (!opts.redactUrls) {
@@ -74,8 +75,14 @@ function splitParts(chunk) {
   let reply = null;
   const reactions = [];
   const contentLines = [];
-  for (let part of chunk.contentParts) {
-    if (part.startsWith('>')) {
+  const parts = chunk.contentParts;
+  for (let i = 0; i < parts.length; i++) {
+    let part = parts[i];
+    // Only the FIRST part can be a reply token (assembleMessage always emits it
+    // there); a body part that starts with ">" is a markdown blockquote and
+    // stays content. `hasReply !== false` keeps the legacy heuristic for
+    // hand-built objects that don't set the flag.
+    if (i === 0 && chunk.hasReply !== false && part.startsWith('>')) {
       reply = part.replace(/^>\s*/, '');
       continue;
     }

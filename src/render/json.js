@@ -7,16 +7,18 @@ import { redactString } from '../core/redact.js';
 
 export function renderJSON(finalChunks, userMap, opts) {
   const msgs = finalChunks.map((c) => {
-    const reply =
-      c.contentParts.find((p) => p.startsWith('>'))?.replace(/^>\s*/, '') ||
-      null;
+    // Only the FIRST part is a reply token; a body part starting with ">" is a
+    // markdown blockquote and belongs in content.
+    const isReply =
+      c.hasReply !== false && (c.contentParts[0] || '').startsWith('>');
+    const reply = isReply ? c.contentParts[0].replace(/^>\s*/, '') : null;
     return {
       timestamp: c.timestamp.toISOString(),
       author: opts.redactNames ? c.authorId : c.authorName,
       authorId: c.authorId,
       content: redactString(
         c.contentParts
-          .filter((p) => !p.startsWith('>') && !p.startsWith('^'))
+          .filter((p, i) => !(i === 0 && isReply) && !p.startsWith('^'))
           .join('\n'),
         opts,
       ),

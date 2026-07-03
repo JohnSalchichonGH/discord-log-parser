@@ -213,13 +213,16 @@ function renderCalendar() {
 }
 
 // ── message rendering ────────────────────────────────────────────────────────
-function parseParts(parts) {
+function parseParts(parts, hasReply) {
   let reply = null;
   const media = [];
   let reactions = [];
   const text = [];
-  for (const p of parts) {
-    if (p.startsWith('> ')) {
+  for (let idx = 0; idx < parts.length; idx++) {
+    const p = parts[idx];
+    // Only the first part is a reply token; a body part that starts with ">" is
+    // a markdown blockquote and falls through to the text branch below.
+    if (idx === 0 && hasReply !== false && p.startsWith('> ')) {
       const m = p.match(/^>\s*([^:]+):\s*([\s\S]*)$/);
       if (m)
         reply = { who: S.umap.get(m[1].trim()) || m[1].trim(), snippet: m[2] };
@@ -297,11 +300,11 @@ function avatar(m) {
 
 function messageHtml(m, i, grouped) {
   if (m.isSystem) {
-    const { text, media } = parseParts(m.parts);
+    const { text, media } = parseParts(m.parts, m.hasReply);
     const body = text || media.map((x) => x.name || x.type).join(' ');
     return `<div class="day-sys" data-i="${i}">${escHtml(body)} · ${fmtTime(m.ts, S.tz)}</div>`;
   }
-  const { reply, text, media, reactions } = parseParts(m.parts);
+  const { reply, text, media, reactions } = parseParts(m.parts, m.hasReply);
   let inner = '';
   if (reply)
     inner += `<div class="msg-reply"><span class="msg-reply-who">${escHtml(reply.who)}</span> ${escHtml(reply.snippet.length > 120 ? reply.snippet.slice(0, 119) + '…' : reply.snippet)}</div>`;

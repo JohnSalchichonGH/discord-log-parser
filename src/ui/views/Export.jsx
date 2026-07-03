@@ -32,7 +32,12 @@ function downloadAll() {
   const format = cfg.outputFormat;
   const { maxTokens, renderOpts } = exportConfig(cfg);
   const doChunk = cfg.chunkOutput;
-  const overlap = parseInt(cfg.chunkOverlap) || 500;
+  // Preserve an explicit 0 (no overlap); only fall back to the default when the
+  // field is blank/invalid. `|| 500` would silently override 0.
+  const parsedOverlap = parseInt(cfg.chunkOverlap, 10);
+  const overlap = Number.isNaN(parsedOverlap)
+    ? 500
+    : Math.max(0, parsedOverlap);
 
   let dlCount = 0;
   for (const po of outputs) {
@@ -85,10 +90,13 @@ export function Export() {
 
   const onDownload = () => {
     const n = downloadAll();
-    downloadStatus.value = {
-      text: `${n} file(s) downloading…`,
-      kind: 'success',
-    };
+    downloadStatus.value =
+      n > 0
+        ? { text: `${n} file(s) downloading…`, kind: 'success' }
+        : {
+            text: 'Nothing to download yet — process an export first.',
+            kind: 'error',
+          };
   };
 
   return (

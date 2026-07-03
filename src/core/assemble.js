@@ -299,5 +299,10 @@ export function assembleMessage(raw, uidOf) {
     contentParts,
     isSystem: raw.isSystem,
     replyToMessageId: raw.replyToMessageId || null,
+    // Whether contentParts[0] is a reply token ("> uid: snippet") rather than a
+    // markdown blockquote in the body. The renderers can't tell the two apart by
+    // string alone (both start with "> "), so record it here — the one place a
+    // reply is ever emitted (always at index 0).
+    hasReply: raw.replyToName != null,
   };
 }

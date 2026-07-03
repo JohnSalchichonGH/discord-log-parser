@@ -194,6 +194,7 @@ self.onmessage = (e) => {
           ts: m.timestamp.getTime(),
           parts: m.contentParts,
           isSystem: m.isSystem,
+          hasReply: m.hasReply,
         })),
         userMap: [...userMap.entries()],
       });

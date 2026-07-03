@@ -51,6 +51,21 @@ describe('renderJSON', () => {
     expect(red.participants).toEqual({ U1: 'U1', U2: 'U2' });
     expect(red.messages[0].author).toBe('U1');
   });
+
+  it('keeps a leading blockquote in content when it is not a reply', () => {
+    const m = [
+      {
+        authorId: 'U1',
+        authorName: 'alice',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['> just quoting', 'my point'],
+        hasReply: false,
+      },
+    ];
+    const parsed = JSON.parse(renderJSON(m, userMap, {}));
+    expect(parsed.messages[0].replyTo).toBeNull();
+    expect(parsed.messages[0].content).toBe('> just quoting\nmy point');
+  });
 });
 
 describe('renderMarkdown', () => {
@@ -139,6 +154,36 @@ describe('renderHTML', () => {
     expect(out).not.toContain('<script>alert(1)</script>');
     expect(out).not.toContain('<img src=x onerror');
     expect(out).toContain('&lt;script&gt;');
+  });
+
+  it('treats a leading markdown blockquote as content, not a reply', () => {
+    const m = [
+      {
+        authorId: 'U1',
+        authorName: 'alice',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['> just quoting something', 'my point'],
+        hasReply: false,
+      },
+    ];
+    const out = renderHTML(m, userMap, 1000, {});
+    expect(out).not.toContain('class="reply"');
+    expect(out).toContain('&gt; just quoting something');
+    expect(out).toContain('my point');
+  });
+
+  it('renders bare [STICKER] tokens (no colon) as chips', () => {
+    const m = [
+      {
+        authorId: 'U1',
+        authorName: 'alice',
+        timestamp: new Date('2025-07-12T03:50:00Z'),
+        contentParts: ['[STICKER]'],
+        hasReply: false,
+      },
+    ];
+    const out = renderHTML(m, userMap, 1000, {});
+    expect(out).toContain('<span class="chip">[STICKER]</span>');
   });
 
   it('turns media tokens into chips and linkifies URLs', () => {
