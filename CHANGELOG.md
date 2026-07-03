@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The token budget now reserves ~15% headroom for denser tokenizers.** Even
+  the exact `cl100k` tokenizer under-counts what some models see — Gemini and
+  non-English text tokenize ~20% denser — so a "1M token" export overshot the
+  real limit. The trim (and chunk sizing) now targets ~15% below the stated
+  budget, applied only above a 1,000-token floor so small exports aren't cut.
+  The stated limit is still shown in the output header; the Configure hint notes
+  the reservation.
 - **Uploading many large files no longer risks running out of memory.** File
   text used to be held twice forever (page + worker) and posted to the worker
   as one giant message; parsed messages also duplicated author strings once per

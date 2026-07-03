@@ -22,6 +22,26 @@ export function legendReserve(userCount) {
   return 200 + userCount * 40;
 }
 
+// Headroom reserved below the user's stated budget. The bundled counters (the
+// char estimator and even the exact cl100k BPE tokenizer) run LOOSER than some
+// real model tokenizers — notably Gemini, and any non-English text, which
+// cl100k splits far more coarsely than Gemini/Gemma — so an output measured at
+// the budget here can overshoot it by ~20% in the user's actual model. Trimming
+// to a reduced budget keeps the real output within the requested limit.
+export const BUDGET_HEADROOM = 0.15;
+// The margin applies only to the budget ABOVE this floor, so small exports (a
+// few hundred tokens) aren't decimated by the reservation.
+const BUDGET_FLOOR = 1000;
+
+// The budget the trim actually targets: the user's limit minus BUDGET_HEADROOM
+// of everything above BUDGET_FLOOR. Unit-agnostic (tokens or chars).
+export function effectiveBudget(limit) {
+  if (!(limit > BUDGET_FLOOR)) return limit;
+  return Math.round(
+    BUDGET_FLOOR + (limit - BUDGET_FLOOR) * (1 - BUDGET_HEADROOM),
+  );
+}
+
 // Drop oldest non-priority messages until `measure(messages)` <= maxChars.
 // `measure` is the real renderer, so the result is guaranteed to fit (unless the
 // retained priority messages alone already exceed the budget, in which case we

@@ -106,7 +106,8 @@ export function Configure() {
             />
             <div class="form-hint">
               ≈ <span id="maxCharsLabel">{charLabel(maxTokens)}</span>{' '}
-              characters
+              characters · ~15% headroom reserved so the output fits models
+              whose tokenizer runs denser (e.g. Gemini, non-English text)
             </div>
           </div>
         </div>

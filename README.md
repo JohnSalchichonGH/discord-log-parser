@@ -163,6 +163,11 @@ display.
   (within a few percent of real GPT `cl100k_base` counts; other models'
   tokenizers vary). For exact counts, use
   `dist/index-accurate.html` (real GPT `cl100k_base` BPE tokenizer, opt-in toggle).
+- No bundled tokenizer matches every model. Gemini (and non-English text)
+  tokenizes denser than `cl100k`, so the trim reserves ~15% headroom below your
+  stated budget — a 1,000,000-token limit trims to ~850,000. This keeps most
+  outputs within the real limit; if your logs are heavily non-English you may
+  want to set the budget a little lower still.
 - Token-budget trimming is calibrated for the Compact TXT output; the JSON/Markdown/
   CSV/HTML formats and chunk sizes may run larger than the selected budget.
 - Media appears in the explorer as labeled chips, not thumbnails (exports are text,

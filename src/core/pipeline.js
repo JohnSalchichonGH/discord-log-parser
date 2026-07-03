@@ -15,6 +15,7 @@ import {
   legendReserve,
   fitToBudget,
   topUpToBudget,
+  effectiveBudget,
 } from './budget.js';
 import { renderTxt } from '../render/txt.js';
 
@@ -554,7 +555,12 @@ export function trimGroup(filtered, opts, userMap) {
   // token counter is supplied (B4), measure tokens against maxTokens; otherwise
   // fall back to the char-based estimate against maxChars.
   const prioritySet = new Set(priorityMsgs);
-  const limit = countTokens && maxTokens ? maxTokens : maxChars;
+  // Trim to the effective (headroom-reduced) budget so the real output fits the
+  // user's model, but keep the rendered header labelled with their stated limit.
+  // Only the token path (the one production always uses) reserves headroom; the
+  // char fallback keeps its exact legacy limit.
+  const limit =
+    countTokens && maxTokens ? effectiveBudget(maxTokens) : maxChars;
   const measure =
     countTokens && maxTokens
       ? (msgs) => countTokens(renderTxt(msgs, userMap, maxTokens, {}))

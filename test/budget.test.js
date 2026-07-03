@@ -6,9 +6,30 @@ import {
   legendReserve,
   fitToBudget,
   topUpToBudget,
+  effectiveBudget,
+  BUDGET_HEADROOM,
 } from '../src/core/budget.js';
 import { processGroup } from '../src/core/pipeline.js';
 import { renderTxt } from '../src/render/txt.js';
+
+describe('effectiveBudget (headroom for denser model tokenizers)', () => {
+  it('reserves BUDGET_HEADROOM of the budget above the 1k floor', () => {
+    // 1M budget → 1000 + 999000*0.85 = 850,150 (~15% reserved).
+    expect(effectiveBudget(1_000_000)).toBe(
+      Math.round(1000 + 999_000 * (1 - BUDGET_HEADROOM)),
+    );
+    // The reserved fraction of a large budget approaches BUDGET_HEADROOM.
+    const r = 1 - effectiveBudget(1_000_000) / 1_000_000;
+    expect(r).toBeGreaterThan(0.14);
+    expect(r).toBeLessThan(0.16);
+  });
+
+  it('leaves small budgets (<= 1k) untouched, and never grows a budget', () => {
+    expect(effectiveBudget(1000)).toBe(1000);
+    expect(effectiveBudget(500)).toBe(500);
+    expect(effectiveBudget(200_000)).toBeLessThan(200_000);
+  });
+});
 
 describe('messageCost', () => {
   it('counts per-part indentation (conservative vs the old join+15)', () => {
@@ -178,5 +199,35 @@ describe('A7: rendered output stays within the budget', () => {
       renderTxt(finalChunks, userMap, maxTokens, {}),
     );
     expect(measured).toBeLessThanOrEqual(maxTokens);
+  });
+
+  it('reserves headroom below the stated token budget (above the 1k floor)', () => {
+    // Enough messages to overflow the budget, so the trim is what bounds output.
+    const messages = Array.from({ length: 400 }, (_, i) => ({
+      id: String(1000 + i),
+      type: 'Default',
+      timestamp: `2025-07-12T03:${String(i % 60).padStart(2, '0')}:00+00:00`,
+      content: `distinctive message number ${i} with some padding words`,
+      author: { id: '111', name: 'alice', nickname: 'alice', isBot: false },
+      attachments: [],
+      embeds: [],
+      stickers: [],
+      reactions: [],
+    }));
+    const files = [{ isJson: true, content: JSON.stringify({ messages }) }];
+    const countTokens = (t) => t.length; // 1 token/char, deterministic
+    const maxTokens = 4000; // above the 1k floor → ~15% reserved
+    const { finalChunks, userMap } = processGroup(files, {
+      ...opts(1_000_000),
+      countTokens,
+      maxTokens,
+    });
+    const used = countTokens(renderTxt(finalChunks, userMap, maxTokens, {}));
+    // Lands within the reduced budget, and strictly below the stated limit —
+    // that gap is the headroom that absorbs a denser real tokenizer.
+    expect(used).toBeLessThanOrEqual(effectiveBudget(maxTokens));
+    expect(used).toBeLessThan(maxTokens);
+    // ...but the top-up still fills most of the reduced budget (not over-trimmed).
+    expect(used).toBeGreaterThan(effectiveBudget(maxTokens) * 0.8);
   });
 });

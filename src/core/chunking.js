@@ -1,11 +1,13 @@
 // Splits a message list into context-window-sized chunks with overlap.
 // Uses the same conservative per-message cost as the budget trim (A7).
 
-import { messageCost, legendReserve } from './budget.js';
+import { messageCost, legendReserve, effectiveBudget } from './budget.js';
 import { charsForTokens } from './tokens.js';
 
 export function chunkMessages(allMsgs, maxTokens, overlap) {
-  const maxChars = charsForTokens(maxTokens);
+  // Reserve the same headroom as the single-file trim so each chunk fits the
+  // model's real context window (see effectiveBudget).
+  const maxChars = charsForTokens(effectiveBudget(maxTokens));
   const headerBudget = legendReserve(0);
   const chunks = [];
   let start = 0;
