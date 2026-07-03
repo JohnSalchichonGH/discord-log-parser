@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getFilteredMessages } from '../src/core/pipeline.js';
+import { getFilteredMessages, buildIdentity } from '../src/core/pipeline.js';
 import { dateToSnowflake } from '../src/core/snowflake.js';
 
 // Merge-accuracy pins: format-priority dedup, cross-format signature
@@ -226,6 +226,57 @@ describe('TXT clock anchoring (exporter-timezone correction)', () => {
     // Unshifted: the three mid-day copies still dedup (same UTC day), but the
     // 23:30 message's TXT copy lands on the next UTC day and survives as a dup.
     expect(filtered).toHaveLength(times.length + 1);
+  });
+});
+
+describe('label freshness: exportedAt beats message recency', () => {
+  it('uses the nickname from the most recently EXPORTED file', () => {
+    // Active channel exported 2025 (old nick, newest messages) vs a quiet
+    // channel re-exported 2026 (new nick, old messages, exportedAt present).
+    const activeOldExport = {
+      isJson: true,
+      channelId: '1',
+      sortOrder: 0,
+      content: mkJson([
+        [
+          snow(T0),
+          '7',
+          'oldnick',
+          'newest message here',
+          new Date(T0).toISOString(),
+        ],
+      ]),
+    };
+    const old = Date.UTC(2023, 0, 5, 12, 0, 0);
+    const quietRecentExport = {
+      isJson: true,
+      channelId: '2',
+      sortOrder: 1,
+      content: JSON.stringify({
+        guild: { id: '9', name: 'G' },
+        channel: { id: '2', name: 'quiet' },
+        dateRange: { after: null },
+        exportedAt: '2026-07-01T00:00:00Z',
+        messages: [
+          {
+            id: snow(old),
+            type: 'Default',
+            timestamp: new Date(old).toISOString(),
+            content: 'an old message',
+            author: { id: '7', name: '7_user', nickname: 'newnick' },
+          },
+        ],
+        messageCount: 1,
+      }),
+    };
+    const { userMap, filtered } = getFilteredMessages(
+      [activeOldExport],
+      baseOpts(),
+      // identity built across BOTH files, like the app does
+      buildIdentity([activeOldExport, quietRecentExport], false),
+    );
+    expect(filtered).toHaveLength(1);
+    expect(userMap.get(filtered[0].authorId)).toBe('newnick');
   });
 });
 

@@ -50,10 +50,14 @@ const pushTo = (map, key, val) => {
 // Identity is keyed by Discord user id when present; id-less (TXT) authors are
 // matched by display name or by an aliased username. One person's renamed/remade
 // accounts (same nickname + similar username + non-overlapping activity) are
-// merged. Each identity is labeled with its most recent REAL nickname (deleted/
-// placeholder names are skipped when a real one exists); identities that still
-// collide on a label are disambiguated ("kot", "kot (2)").
-export function buildUserMap(perFileRaw, useRealNames) {
+// merged. Each identity is labeled with its most recent REAL nickname — ranked
+// by the FILE's export recency (see Pass 3), since DCE stamps names at export
+// time — with deleted/placeholder names skipped when a real one exists;
+// identities that still collide on a label are disambiguated ("kot", "kot (2)").
+//
+// fileRecency (optional): per-file export times parallel to perFileRaw, used to
+// rank name freshness; defaults to each file's newest message timestamp.
+export function buildUserMap(perFileRaw, useRealNames, fileRecency) {
   const idToUid = new Map(); // 'id:<key>' | 'name:<nm>' -> uid
   const nameToUid = new Map(); // display name / username alias -> uid
   let n = 1;
@@ -97,15 +101,38 @@ export function buildUserMap(perFileRaw, useRealNames) {
       if (m.replyToName || m.replyToKey) register(m.replyToKey, m.replyToName);
 
   // Pass 3: gather per-uid observations (name candidates + activity window).
+  //
+  // Name freshness is ranked by the FILE's export recency first, then the
+  // message timestamp. DCE stamps every message with the author's name AS OF
+  // EXPORT TIME (constant per author per file) — so "which nickname is newest"
+  // is a property of when the file was exported, not of which file happens to
+  // contain the author's newest message. Without this, an active channel
+  // exported a year ago (old nick, new messages) outvotes a quiet channel
+  // exported yesterday (new nick, old messages). fileRecency comes from the
+  // caller (JSON exportedAt when available, else the file's newest message);
+  // when absent it falls back to each file's max message timestamp.
+  const recency =
+    fileRecency ||
+    perFileRaw.map((msgs) => {
+      let max = 0;
+      for (const m of msgs) {
+        const t = m.timestamp ? m.timestamp.getTime() : 0;
+        if (t > max) max = t;
+      }
+      return max;
+    });
   const info = new Map();
-  const better = (slot, name, ts) => {
-    if (!slot.name || ts >= slot.ts) {
+  const better = (slot, name, rec, ts) => {
+    if (!slot.name || rec > slot.rec || (rec === slot.rec && ts >= slot.ts)) {
       slot.name = name;
+      slot.rec = rec;
       slot.ts = ts;
     }
   };
-  for (const msgs of perFileRaw)
-    for (const m of msgs) {
+  const nameSlot = () => ({ name: null, rec: -1, ts: -1 });
+  for (let fi = 0; fi < perFileRaw.length; fi++) {
+    const rec = recency[fi] || 0;
+    for (const m of perFileRaw[fi]) {
       const uid = resolve(m.authorKey, m.authorName);
       if (!uid) continue;
       const nm = (m.authorName || '').trim();
@@ -119,9 +146,9 @@ export function buildUserMap(perFileRaw, useRealNames) {
           count: 0,
           min: ts,
           max: ts,
-          realId: { name: null, ts: -1 }, // latest real nick from an id-backed msg
-          realNoId: { name: null, ts: -1 }, // latest real name from a TXT msg
-          any: { name: null, ts: -1 }, // latest name of any kind (placeholder fallback)
+          realId: nameSlot(), // freshest real nick from an id-backed msg
+          realNoId: nameSlot(), // freshest real name from a TXT msg
+          any: nameSlot(), // freshest name of any kind (placeholder fallback)
         };
         info.set(uid, e);
       }
@@ -134,11 +161,12 @@ export function buildUserMap(perFileRaw, useRealNames) {
           e.username = m.authorUsername.trim();
       }
       if (nm) {
-        better(e.any, nm, ts);
+        better(e.any, nm, rec, ts);
         if (!PLACEHOLDER.test(nm))
-          better(m.authorKey ? e.realId : e.realNoId, nm, ts);
+          better(m.authorKey ? e.realId : e.realNoId, nm, rec, ts);
       }
     }
+  }
   const nickOf = (e) => e.realId.name || e.realNoId.name || e.any.name || e.uid;
 
   // Auto-merge alts: id-backed identities sharing a nickname, with similar
@@ -195,15 +223,15 @@ export function buildUserMap(perFileRaw, useRealNames) {
     if (!ci) {
       ci = {
         count: 0,
-        realId: { name: null, ts: -1 },
-        realNoId: { name: null, ts: -1 },
-        any: { name: null, ts: -1 },
+        realId: nameSlot(),
+        realNoId: nameSlot(),
+        any: nameSlot(),
       };
       canon.set(c, ci);
     }
     ci.count += e.count;
     for (const slot of ['realId', 'realNoId', 'any'])
-      if (e[slot].name) better(ci[slot], e[slot].name, e[slot].ts);
+      if (e[slot].name) better(ci[slot], e[slot].name, e[slot].rec, e[slot].ts);
   }
   const label = new Map();
   for (const [c, ci] of canon)

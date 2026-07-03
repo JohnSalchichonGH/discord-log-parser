@@ -46,6 +46,33 @@ describe('buildUserMap stable identity (#4)', () => {
     expect(userMap.get('U1')).toBe('new'); // most-recent nickname wins
   });
 
+  it('labels by EXPORT recency, not message recency (nicks are stamped at export time)', () => {
+    // Active channel exported long ago: old nick on NEW messages. Quiet channel
+    // exported recently: new nick on OLD messages. The recent export knows the
+    // current nick — it must win even though its messages are older.
+    const oldExport = [
+      raw({
+        authorKey: '111',
+        authorName: 'oldnick',
+        timestamp: new Date('2025-06-01T00:00:00Z'), // newest message
+      }),
+    ];
+    const newExport = [
+      raw({
+        authorKey: '111',
+        authorName: 'newnick',
+        timestamp: new Date('2023-01-01T00:00:00Z'), // old message
+      }),
+    ];
+    const { userMap } = buildUserMap(
+      [oldExport, newExport],
+      false,
+      // export times: the second file was exported much later
+      [Date.parse('2025-06-02T00:00:00Z'), Date.parse('2026-07-01T00:00:00Z')],
+    );
+    expect(userMap.get('U1')).toBe('newnick');
+  });
+
   it('prefers an id-backed nickname over an id-less (TXT) name for the label', () => {
     // Same person: an id-backed HTML/JSON nickname "k" plus a later TXT line
     // written by username "kang0420". The id-backed nickname should win.

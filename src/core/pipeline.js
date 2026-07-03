@@ -31,12 +31,41 @@ export function getRawMessages(f) {
   return f._raw;
 }
 
+// A file's export recency, used to rank which file's nicknames are freshest
+// (DCE stamps names at export time). JSON exports carry the exact instant in
+// their exportedAt metadata — sniffed from the content head, BEFORE the
+// messages array, so chat text can never spoof it. Other formats fall back to
+// the file's newest message timestamp (a lower bound on the export time).
+function fileExportRecency(f) {
+  if (f.isJson) {
+    const head = String(f.content);
+    const cut = head.indexOf('"messages"');
+    const m = head
+      .slice(0, cut >= 0 && cut < 8000 ? cut : 8000)
+      .match(/"exportedAt"\s*:\s*"([^"]+)"/);
+    if (m) {
+      const t = new Date(m[1]).getTime();
+      if (!isNaN(t)) return t;
+    }
+  }
+  let max = 0;
+  for (const r of getRawMessages(f)) {
+    const t = r.timestamp ? r.timestamp.getTime() : 0;
+    if (t > max) max = t;
+  }
+  return max;
+}
+
 // Build the shared identity (userMap + uidOf) across a set of files. Pass the
 // result into getFilteredMessages/processGroup so every channel group resolves
 // people against ONE global identity space — a person active in several channels
 // is one identity, with one consistent (most-recent) name everywhere.
 export function buildIdentity(files, useRealNames) {
-  return buildUserMap(files.map(getRawMessages), useRealNames);
+  return buildUserMap(
+    files.map(getRawMessages),
+    useRealNames,
+    files.map(fileExportRecency),
+  );
 }
 
 // Normalized text for cross-format matching (dedup signatures, the identity

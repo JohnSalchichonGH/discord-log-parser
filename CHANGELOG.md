@@ -25,6 +25,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   file's offset is now estimated from its own overlap with id-bearing exports
   (median delta across ≥10 distinctive matches, applied only when consistent)
   and the whole file is corrected. TXT-only groups are untouched.
+- **Identity: labels now track the most recently EXPORTED nickname.** DCE
+  stamps every message with the author's name as of export time (constant per
+  file), but labels were picked from whichever file contained the person's
+  newest *message* — so an active channel exported a year ago (old nick, new
+  messages) outvoted a quiet channel exported yesterday (new nick, old
+  messages). Names are now ranked by the file's export recency — JSON's
+  `exportedAt` when present, else the file's newest message — so the freshest
+  export decides the label.
 - **Identity: renamed users with only a few overlapping messages now unify.**
   The message-content bridge counts only distinctive texts (≥12 chars) as
   evidence and folds at ≥3 matches (was ≥8) — so a person whose old TXT nick
