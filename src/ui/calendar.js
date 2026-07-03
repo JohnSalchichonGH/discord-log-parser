@@ -81,6 +81,14 @@ function fmtTime(ms, tz) {
   let h = p.h % 12 || 12;
   return `${h}:${pad2(p.mi)} ${p.h < 12 ? 'AM' : 'PM'}`;
 }
+// Compact clock for the grouped-message gutter: "h:mm" only. The gutter is
+// exactly as wide as the avatar column (so grouped text aligns), which can't
+// fit "12:01 AM" without wrapping — and the group's header row already shows
+// the full time, so the suffix is redundant there.
+function fmtTimeShort(ms, tz) {
+  const p = dparts(ms, tz);
+  return `${p.h % 12 || 12}:${pad2(p.mi)}`;
+}
 function fmtDayLabel(key) {
   const [y, mo, day] = keyParts(key);
   const dow = new Date(Date.UTC(y, mo - 1, day)).getUTCDay();
@@ -309,7 +317,7 @@ function messageHtml(m, i, grouped) {
       .join('')}</div>`;
 
   if (grouped)
-    return `<div class="msg grouped" data-i="${i}"><div class="msg-gutter"><span class="msg-gtime">${fmtTime(m.ts, S.tz)}</span></div><div class="msg-body">${inner}</div></div>`;
+    return `<div class="msg grouped" data-i="${i}"><div class="msg-gutter"><span class="msg-gtime" title="${fmtTime(m.ts, S.tz)}">${fmtTimeShort(m.ts, S.tz)}</span></div><div class="msg-body">${inner}</div></div>`;
   return `<div class="msg" data-i="${i}">${avatar(m)}<div class="msg-main"><div class="msg-head"><span class="msg-name">${escHtml(m.authorName)}</span><span class="msg-time">${fmtTime(m.ts, S.tz)}</span></div><div class="msg-body">${inner}</div></div></div>`;
 }
 

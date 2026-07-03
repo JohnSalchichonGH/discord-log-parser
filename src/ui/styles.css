@@ -1043,7 +1043,7 @@ textarea { resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.5
   opacity: 0;
 }
 .msg.grouped:hover .msg-gutter { opacity: 1; }
-.msg-gtime { font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); }
+.msg-gtime { font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; }
 .msg-body { min-width: 0; }
 .msg-text {
   color: var(--text-primary);
