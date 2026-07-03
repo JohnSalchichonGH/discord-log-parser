@@ -39,24 +39,14 @@ export function buildIdentity(files, useRealNames) {
   return buildUserMap(files.map(getRawMessages), useRealNames);
 }
 
-// Parse + dedup + apply the pre-filters (date/bots/system/media/whitelist),
-// returning ONE channel group's full filtered conversation (NOT token-trimmed).
-// The export pipeline (processGroup) and the analytics (getFilteredConversation)
-// both call this per channel group with the SAME shared identity, so their
-// message sets reconcile. When `identity` is supplied it is used instead of
-// building a per-call one, unifying identity across channels.
-export function getFilteredMessages(sortedFiles, opts, identity) {
-  const {
-    userFilter,
-    filterBots: doBotFilter,
-    botSet,
-    filterSystem: doSystemFilter,
-    filterMediaOnly: doMediaFilter,
-    dateFrom,
-    dateTo,
-    useRealNames,
-  } = opts;
-
+// Parse + assemble + dedup ONE channel group into its full conversation (the
+// expensive phases 1–2), WITHOUT the pre-filters. The result depends only on
+// the files and the identity model (useRealNames) — every pre-filter
+// (date/bots/system/media/whitelist) is applied after dedup — so callers (the
+// worker) can cache it and re-apply cheap filters per request. When `identity`
+// is supplied it is used instead of building a per-call one, unifying identity
+// across channels.
+export function assembleGroup(sortedFiles, useRealNames, identity) {
   // Phase 1: parse once (cached), build the shared userMap, assemble messages.
   const perFileRaw = sortedFiles.map(getRawMessages);
   const { userMap, uidOf } = identity || buildUserMap(perFileRaw, useRealNames);
@@ -246,7 +236,24 @@ export function getFilteredMessages(sortedFiles, opts, identity) {
     }
   allMessages.sort((a, b) => a.timestamp - b.timestamp);
 
-  // Phase 2.5: Apply pre-filters (date, bots, system, media-only, user whitelist)
+  return { allMessages, userMap };
+}
+
+// Phase 2.5: the pre-filters (date, bots, system, media-only, user whitelist),
+// applied to an assembled/deduped conversation. Cheap (array passes), safe to
+// re-run per request against a cached assembleGroup result; never mutates the
+// messages.
+export function applyMessageFilters(allMessages, opts, userMap) {
+  const {
+    userFilter,
+    filterBots: doBotFilter,
+    botSet,
+    filterSystem: doSystemFilter,
+    filterMediaOnly: doMediaFilter,
+    dateFrom,
+    dateTo,
+  } = opts;
+
   let filtered = allMessages;
 
   if (dateFrom) filtered = filtered.filter((m) => m.timestamp >= dateFrom);
@@ -276,6 +283,21 @@ export function getFilteredMessages(sortedFiles, opts, identity) {
   if (opts.userFilterIds && opts.userFilterIds.size > 0)
     filtered = filtered.filter((m) => opts.userFilterIds.has(m.authorId));
 
+  return filtered;
+}
+
+// Parse + dedup + apply the pre-filters, returning ONE channel group's full
+// filtered conversation (NOT token-trimmed) — assembleGroup + the filters in
+// one call, for callers without a cache. The export pipeline (processGroup) and
+// the analytics (getFilteredConversation) both use this per channel group with
+// the SAME shared identity, so their message sets reconcile.
+export function getFilteredMessages(sortedFiles, opts, identity) {
+  const { allMessages, userMap } = assembleGroup(
+    sortedFiles,
+    opts.useRealNames,
+    identity,
+  );
+  const filtered = applyMessageFilters(allMessages, opts, userMap);
   return { filtered, userMap, allMessagesCount: allMessages.length };
 }
 
@@ -298,12 +320,27 @@ export function getFilteredConversation(files, opts) {
 }
 
 export function processGroup(sortedFiles, opts, identity) {
-  const { minMsgs, maxChars, keywords, countTokens, maxTokens } = opts;
   const { filtered, userMap, allMessagesCount } = getFilteredMessages(
     sortedFiles,
     opts,
     identity,
   );
+  const { finalChunks, budgetExceeded } = trimGroup(filtered, opts, userMap);
+  return {
+    finalChunks,
+    userMap,
+    allMessagesCount,
+    filteredCount: filtered.length,
+    budgetExceeded,
+  };
+}
+
+// Phases 3+ of the export pipeline: token-budget trim with keyword priority,
+// verify-and-retrim, top-up, and the post-trim low-activity filter — applied to
+// an already-filtered conversation. Split out so the worker can run it against
+// a cached assembleGroup result without re-running assembly/dedup.
+export function trimGroup(filtered, opts, userMap) {
+  const { minMsgs, maxChars, keywords, countTokens, maxTokens } = opts;
 
   // Phase 3: Token-limit trim with keyword priority
   let priorityMsgs = [];
@@ -387,11 +424,5 @@ export function processGroup(sortedFiles, opts, identity) {
       finalChunks = finalChunks.filter((m) => !excluded.has(m.authorId));
   }
 
-  return {
-    finalChunks,
-    userMap,
-    allMessagesCount,
-    filteredCount: filtered.length,
-    budgetExceeded,
-  };
+  return { finalChunks, budgetExceeded };
 }
